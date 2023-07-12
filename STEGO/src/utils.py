@@ -18,7 +18,7 @@ from torchmetrics import Metric
 from torchvision import models
 from torchvision import transforms as T
 from torch.utils.tensorboard.summary import hparams
-
+from torchvision import transforms
 
 def prep_for_plot(img, rescale=True, resize=None):
     if resize is not None:
@@ -321,3 +321,13 @@ def flexible_collate(batch):
         return [flexible_collate(samples) for samples in transposed]
 
     raise TypeError(default_collate_err_msg_format.format(elem_type))
+
+def denormalize(image):
+    invTrans = T.Compose([T.Normalize(mean = [ 0., 0., 0. ],
+                                                            std = [ 1/0.5, 1/0.5, 1/0.5 ]),
+                                        T.Normalize(mean = [ -0.5, -0.5, -0.5],
+                                                            std = [ 1., 1., 1. ]),
+                                        ])
+
+    inv_tensor = invTrans(image)
+    return inv_tensor
