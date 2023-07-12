@@ -23,7 +23,9 @@ from core.checkpoint import CheckpointIO
 from core.data_loader import InputFetcher
 import core.utils as utils
 from metrics.eval import calculate_metrics
-
+from STEGO.src.train_segmentation import LitUnsupervisedSegmenter
+from STEGO.src.crf import dense_crf
+from STEGO.src.utils import unnorm, remove_axes
 
 class Solver(nn.Module):
     def __init__(self, args):
