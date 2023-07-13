@@ -133,7 +133,7 @@ class Solver(nn.Module):
             optims.discriminator.step()
 
             d_loss, d_losses_ref = compute_d_loss(
-                nets, args, x_real, y_org, y_trg, attention x_ref=x_ref, masks=masks)
+                nets, args, x_real, y_org, y_trg, attention, x_ref=x_ref, masks=masks)
             self._reset_grad()
             d_loss.backward()
             optims.discriminator.step()
