@@ -203,7 +203,7 @@ class Solver(nn.Module):
 
         fname = ospj(args.result_dir, 'reference.jpg')
         print('Working on {}...'.format(fname))
-        utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname)
+        utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, self.stego_model, fname)
 
         fname = ospj(args.result_dir, 'video_ref.mp4')
         print('Working on {}...'.format(fname))
