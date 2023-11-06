@@ -119,7 +119,9 @@ class Solver(nn.Module):
                 mask_A = (linear_pred_A == 7)*1
                 #ho la maschera, la converto in pytorch e genero quindi l'attenzione
                 attention = torch.tensor(mask_A).cuda()
-
+                #UPDATE: we try to maskerate the input image
+                background = x_real *(1-attention)
+                x_real = x_real*attention
 
             x_ref, x_ref2, y_trg = inputs.x_ref, inputs.x_ref2, inputs.y_ref
             z_trg, z_trg2 = inputs.z_trg, inputs.z_trg2
@@ -150,22 +152,23 @@ class Solver(nn.Module):
                 ref2_attention = torch.tensor(mask_A).cuda()
                 x_ref2 = x_ref2 * ref2_attention
 
+            
             # train the discriminator
             d_loss, d_losses_latent = compute_d_loss(
-                nets, args, x_real, y_org, y_trg, attention, z_trg=z_trg, masks=masks)
+                nets, args, x_real, y_org, y_trg, attention, background, z_trg=z_trg, masks=masks)
             self._reset_grad()
             d_loss.backward()
             optims.discriminator.step()
 
             d_loss, d_losses_ref = compute_d_loss(
-                nets, args, x_real, y_org, y_trg, attention, x_ref=x_ref, masks=masks)
+                nets, args, x_real, y_org, y_trg, attention, background, x_ref=x_ref, masks=masks)
             self._reset_grad()
             d_loss.backward()
             optims.discriminator.step()
 
             # train the generator
             g_loss, g_losses_latent = compute_g_loss(
-                nets, args, x_real, y_org, y_trg, attention, z_trgs=[z_trg, z_trg2], masks=masks)
+                nets, args, x_real, y_org, y_trg, attention, background, z_trgs=[z_trg, z_trg2], masks=masks)
             self._reset_grad()
             g_loss.backward()
             optims.generator.step()
@@ -173,7 +176,7 @@ class Solver(nn.Module):
             optims.style_encoder.step()
 
             g_loss, g_losses_ref = compute_g_loss(
-                nets, args, x_real, y_org, y_trg, attention, x_refs=[x_ref, x_ref2], masks=masks)
+                nets, args, x_real, y_org, y_trg, attention, background, x_refs=[x_ref, x_ref2], masks=masks)
             
             self._reset_grad()
             g_loss.backward()
@@ -243,7 +246,7 @@ class Solver(nn.Module):
         calculate_metrics(nets_ema, args, step=resume_iter, mode='latent')
         calculate_metrics(nets_ema, args, step=resume_iter, mode='reference')
 
-def compute_d_loss(nets, args, x_real, y_org, y_trg, mask, z_trg=None, x_ref=None, masks=None):
+def compute_d_loss(nets, args, x_real, y_org, y_trg, mask, background, z_trg=None, x_ref=None, masks=None):
     assert (z_trg is None) != (x_ref is None)
     # with real images
     x_real.requires_grad_()
@@ -259,8 +262,9 @@ def compute_d_loss(nets, args, x_real, y_org, y_trg, mask, z_trg=None, x_ref=Non
             s_trg = nets.style_encoder(x_ref, y_trg)
         
         x_fake = nets.generator(x_real, s_trg, masks=masks)
-        # add attention
-        x_fake = x_fake * mask + (1-mask)*x_real
+        # remove attention cause we compute it on the input image and on the reference, but we need to add the background
+        #x_fake = x_fake * mask + (1-mask)*x_real
+        x_fake = x_fake + background
     out = nets.discriminator(x_fake, y_trg)
     loss_fake = adv_loss(out, 0)
 
@@ -269,7 +273,7 @@ def compute_d_loss(nets, args, x_real, y_org, y_trg, mask, z_trg=None, x_ref=Non
                        fake=loss_fake.item(),
                        reg=loss_reg.item())
 
-def compute_g_loss(nets, args, x_real, y_org, y_trg, mask, z_trgs=None, x_refs=None, masks=None):
+def compute_g_loss(nets, args, x_real, y_org, y_trg, mask, background, z_trgs=None, x_refs=None, masks=None):
     assert (z_trgs is None) != (x_refs is None)
     if z_trgs is not None:
         z_trg, z_trg2 = z_trgs
@@ -286,7 +290,8 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, mask, z_trgs=None, x_refs=N
     x_fake = nets.generator(x_real, s_trg, masks=masks)
 
     # mask fake image with attention
-    x_fake = x_fake * mask + (1-mask)*x_real
+    #x_fake = x_fake * mask + (1-mask)*x_real
+    x_fake = x_fake + background
     
     # adversarial loss
     out = nets.discriminator(x_fake, y_trg)
@@ -302,7 +307,8 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, mask, z_trgs=None, x_refs=N
     else:
         s_trg2 = nets.style_encoder(x_ref2, y_trg)
     x_fake2 = nets.generator(x_real, s_trg2, masks=masks)
-    x_fake2 = x_fake2 * mask + (1-mask)*x_real
+    # x_fake2 = x_fake2 * mask + (1-mask)*x_real
+    x_fake2 = x_fake2 + background
     x_fake2 = x_fake2.detach()
     loss_ds = torch.mean(torch.abs(x_fake - x_fake2))
 
@@ -310,12 +316,12 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, mask, z_trgs=None, x_refs=N
     masks = nets.fan.get_heatmap(x_fake) if args.w_hpf > 0 else None
     s_org = nets.style_encoder(x_real, y_org)
     x_rec = nets.generator(x_fake, s_org, masks=masks)
-    x_rec = x_rec*mask + (1-mask)*x_fake
+    x_rec = x_rec + background
     loss_cyc = torch.mean(torch.abs(x_rec - x_real))
 
     # visualization for debugging    
     # with torch.no_grad():
-    #   fig, ax = plt.subplots(1,5, figsize=(5*3,5))
+    #   fig, ax = plt.subplots(1,6, figsize=(5*3,5))
     #   ax[0].imshow(denormalize(x_real).squeeze().permute(1,2,0).cpu().numpy())
     #   ax[0].set_title("x_real")
     #   ax[1].imshow(mask.cpu().numpy())
@@ -326,6 +332,8 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, mask, z_trgs=None, x_refs=N
     #   ax[3].set_title("x_fake2")
     #   ax[4].imshow(denormalize(x_rec)[0].permute(1,2,0).cpu())
     #   ax[4].set_title("x_rec")
+    #   ax[5].imshow(denormalize(background)[0].permute(1,2,0).cpu())
+    #   ax[5].set_title("background")
     #   remove_axes(ax)
     #   fig.savefig('A-B.png')
 
