@@ -206,18 +206,18 @@ class Solver(nn.Module):
                 print(log)
 
             # generate images for debugging
-            if (i+1) % args.sample_every == 0:
-                os.makedirs(args.sample_dir, exist_ok=True)
-                utils.debug_image(nets_ema, args, inputs=inputs_val, step=i+1)
+            # if (i+1) % args.sample_every == 0:
+            #     os.makedirs(args.sample_dir, exist_ok=True)
+            #     utils.debug_image(nets_ema, args, inputs=inputs_val, step=i+1)
 
             # save model checkpoints
             if (i+1) % args.save_every == 0:
                 self._save_checkpoint(step=i+1)
 
             # compute FID and LPIPS if necessary
-            if (i+1) % args.eval_every == 0:
-                calculate_metrics(nets_ema, args, i+1, mode='latent')
-                calculate_metrics(nets_ema, args, i+1, mode='reference')
+            # if (i+1) % args.eval_every == 0:
+            #     calculate_metrics(nets_ema, args, i+1, mode='latent')
+            #     calculate_metrics(nets_ema, args, i+1, mode='reference')
 
     @torch.no_grad()
     def sample(self, loaders):
