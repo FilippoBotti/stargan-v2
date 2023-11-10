@@ -85,6 +85,7 @@ if __name__ == '__main__':
 
     # background arguments
     parser.add_argument('--stego_path', type=str, default='expr/checkpoints/cocostuff.ckpt')
+    parser.add_argument('--background_separation', action='store_true', help='Use background separation')
     parser.add_argument('--mask_input', action='store_true', help='Use stego to mask inputs')
     parser.add_argument('--mask_reference', action='store_true', help='Use stego to mask references')
 
