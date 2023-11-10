@@ -264,7 +264,7 @@ def compute_d_loss(nets, args, x_real, y_org, y_trg, mask, background, z_trg=Non
         x_fake = nets.generator(x_real, s_trg, masks=masks)
         # remove attention cause we compute it on the input image and on the reference, but we need to add the background
         #x_fake = x_fake * mask + (1-mask)*x_real
-        x_fake = x_fake + background
+        x_fake = x_fake*mask + background
     out = nets.discriminator(x_fake, y_trg)
     loss_fake = adv_loss(out, 0)
 
@@ -291,7 +291,7 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, mask, background, z_trgs=No
 
     # mask fake image with attention
     #x_fake = x_fake * mask + (1-mask)*x_real
-    x_fake = x_fake + background
+    x_fake = x_fake*mask  + background
     
     # adversarial loss
     out = nets.discriminator(x_fake, y_trg)
@@ -308,7 +308,7 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, mask, background, z_trgs=No
         s_trg2 = nets.style_encoder(x_ref2, y_trg)
     x_fake2 = nets.generator(x_real, s_trg2, masks=masks)
     # x_fake2 = x_fake2 * mask + (1-mask)*x_real
-    x_fake2 = x_fake2 + background
+    x_fake2 = x_fake2*mask + background
     x_fake2 = x_fake2.detach()
     loss_ds = torch.mean(torch.abs(x_fake - x_fake2))
 
@@ -316,7 +316,7 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, mask, background, z_trgs=No
     masks = nets.fan.get_heatmap(x_fake) if args.w_hpf > 0 else None
     s_org = nets.style_encoder(x_real, y_org)
     x_rec = nets.generator(x_fake, s_org, masks=masks)
-    x_rec = x_rec + background
+    x_rec = x_rec*mask + background
     loss_cyc = torch.mean(torch.abs(x_rec - x_real))
 
     # visualization for debugging    
