@@ -67,7 +67,10 @@ class Solver(nn.Module):
             if ('ema' not in name) and ('fan' not in name):
                 print('Initializing %s...' % name)
                 network.apply(utils.he_init)
-        self.stego_model = LitUnsupervisedSegmenter.load_from_checkpoint(args.stego_path).cuda()
+
+        if args.background_separation:
+            print("Use stego to perform background separation")
+            self.stego_model = LitUnsupervisedSegmenter.load_from_checkpoint(args.stego_path).cuda()
         
 
     def _save_checkpoint(self, step):
@@ -109,66 +112,77 @@ class Solver(nn.Module):
             inputs = next(fetcher)
             x_real, y_org = inputs.x_src, inputs.y_src
             
-            # compute mask based on input
-            # The attention based on input has always to be computed cause we want to maskerate the output based on the input attention
-            with torch.no_grad():
-                code_A = self.stego_model(x_real)
-                linear_probs_A = torch.log_softmax(self.stego_model.linear_probe(code_A), dim=1).cpu()
-                single_img_A = x_real[0].cpu()
-                linear_pred_A = dense_crf(single_img_A, linear_probs_A[0]).argmax(0)
-                mask_A = (linear_pred_A == 7)*1
-                #ho la maschera, la converto in pytorch e genero quindi l'attenzione
-                attention = torch.tensor(mask_A).cuda()
-                #UPDATE: we try to maskerate the input image
-                background = x_real *(1-attention)
-                x_real = x_real*attention
+            if args.background_separation:
+                # compute mask based on input
+                # The attention based on input has always to be computed cause we want to maskerate the output based on the input attention
+                attentions = []
+                backgrounds = []
+                with torch.no_grad():
+                    code_A = self.stego_model(x_real)
+                    linear_probs_A = torch.log_softmax(self.stego_model.linear_probe(code_A), dim=1).cpu()
+                    # for every image in batch_size
+                    for index in range(x_real.shape[0]):
+                        single_img_A = x_real[index].cpu()
+                        linear_pred_A = dense_crf(single_img_A, linear_probs_A[index]).argmax(0)
+                        mask_A = (linear_pred_A == 7)*1
+
+                        attention = torch.tensor(mask_A).cuda()
+                        background = x_real[index] *(1-attention)
+
+                        attentions.append(attention)
+                        backgrounds.append(backgrounds)
+                        if args.mask_input:
+                            #mask input
+                            x_real[index] = x_real[index]*attention
 
             x_ref, x_ref2, y_trg = inputs.x_ref, inputs.x_ref2, inputs.y_ref
             z_trg, z_trg2 = inputs.z_trg, inputs.z_trg2
 
             masks = nets.fan.get_heatmap(x_real) if args.w_hpf > 0 else None
 
-            # compute mask based on reference
-            # Here we need to compute the attention on the reference style images and use the maskerate style images 
-            # to generate fake images based on input
-            with torch.no_grad():
-                # first reference
-                code_A = self.stego_model(x_ref)
-                linear_probs_A = torch.log_softmax(self.stego_model.linear_probe(code_A), dim=1).cpu()
-                single_img_A = x_ref[0].cpu()
-                linear_pred_A = dense_crf(single_img_A, linear_probs_A[0]).argmax(0)
-                mask_A = (linear_pred_A == 7)*1
-                #ho la maschera, la converto in pytorch e genero quindi l'attenzione
-                ref_attention = torch.tensor(mask_A).cuda()
-                x_ref = x_ref * ref_attention
+            if args.background_separation and args.mask_reference:
+                # compute mask based on reference
+                # Here we need to compute the attention on the reference style images and use the maskerate style images 
+                # to generate fake images based on input
+                with torch.no_grad():
+                    # first reference
+                    code_A = self.stego_model(x_ref)
+                    linear_probs_A = torch.log_softmax(self.stego_model.linear_probe(code_A), dim=1).cpu()
+                    # for images in batch size
+                    for index in range(x_ref.shape[0]):
+                        single_img_A = x_ref[index].cpu()
+                        linear_pred_A = dense_crf(single_img_A, linear_probs_A[index]).argmax(0)
+                        mask_A = (linear_pred_A == 7)*1
+                        ref_attention = torch.tensor(mask_A).cuda()
+                        x_ref[index] = x_ref[index] * ref_attention
 
-                # second reference
-                code_A = self.stego_model(x_ref2)
-                linear_probs_A = torch.log_softmax(self.stego_model.linear_probe(code_A), dim=1).cpu()
-                single_img_A = x_ref2[0].cpu()
-                linear_pred_A = dense_crf(single_img_A, linear_probs_A[0]).argmax(0)
-                mask_A = (linear_pred_A == 7)*1
-                #ho la maschera, la converto in pytorch e genero quindi l'attenzione
-                ref2_attention = torch.tensor(mask_A).cuda()
-                x_ref2 = x_ref2 * ref2_attention
+                    # second reference
+                    code_A = self.stego_model(x_ref2)
+                    linear_probs_A = torch.log_softmax(self.stego_model.linear_probe(code_A), dim=1).cpu()
+                    for index in range(x_ref2.shape[0]):
+                        single_img_A = x_ref2[index].cpu()
+                        linear_pred_A = dense_crf(single_img_A, linear_probs_A[index]).argmax(0)
+                        mask_A = (linear_pred_A == 7)*1
+                        ref2_attention = torch.tensor(mask_A).cuda()
+                        x_ref2[index] = x_ref2[index] * ref2_attention
 
             
             # train the discriminator
             d_loss, d_losses_latent = compute_d_loss(
-                nets, args, x_real, y_org, y_trg, attention, background, z_trg=z_trg, masks=masks)
+                nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_trg=z_trg, masks=masks)
             self._reset_grad()
             d_loss.backward()
             optims.discriminator.step()
 
             d_loss, d_losses_ref = compute_d_loss(
-                nets, args, x_real, y_org, y_trg, attention, background, x_ref=x_ref, masks=masks)
+                nets, args, x_real, y_org, y_trg, attentions, backgrounds, x_ref=x_ref, masks=masks)
             self._reset_grad()
             d_loss.backward()
             optims.discriminator.step()
 
             # train the generator
             g_loss, g_losses_latent = compute_g_loss(
-                nets, args, x_real, y_org, y_trg, attention, background, z_trgs=[z_trg, z_trg2], masks=masks)
+                nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_trgs=[z_trg, z_trg2], masks=masks)
             self._reset_grad()
             g_loss.backward()
             optims.generator.step()
@@ -176,7 +190,7 @@ class Solver(nn.Module):
             optims.style_encoder.step()
 
             g_loss, g_losses_ref = compute_g_loss(
-                nets, args, x_real, y_org, y_trg, attention, background, x_refs=[x_ref, x_ref2], masks=masks)
+                nets, args, x_real, y_org, y_trg, attentions, backgrounds, x_refs=[x_ref, x_ref2], masks=masks)
             
             self._reset_grad()
             g_loss.backward()
@@ -231,7 +245,10 @@ class Solver(nn.Module):
 
         fname = ospj(args.result_dir, 'reference.jpg')
         print('Working on {}...'.format(fname))
-        utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, self.stego_model, fname)
+        if args.background_separation:
+            utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, self.stego_model)
+        else:
+            utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname)
 
         fname = ospj(args.result_dir, 'video_ref.mp4')
         print('Working on {}...'.format(fname))
@@ -246,7 +263,7 @@ class Solver(nn.Module):
         calculate_metrics(nets_ema, args, step=resume_iter, mode='latent')
         calculate_metrics(nets_ema, args, step=resume_iter, mode='reference')
 
-def compute_d_loss(nets, args, x_real, y_org, y_trg, mask, background, z_trg=None, x_ref=None, masks=None):
+def compute_d_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_trg=None, x_ref=None, masks=None):
     assert (z_trg is None) != (x_ref is None)
     # with real images
     x_real.requires_grad_()
@@ -262,9 +279,12 @@ def compute_d_loss(nets, args, x_real, y_org, y_trg, mask, background, z_trg=Non
             s_trg = nets.style_encoder(x_ref, y_trg)
         
         x_fake = nets.generator(x_real, s_trg, masks=masks)
-        # remove attention cause we compute it on the input image and on the reference, but we need to add the background
-        #x_fake = x_fake * mask + (1-mask)*x_real
-        x_fake = x_fake*mask + background
+        
+        if args.background_separation:
+            # remove attention cause we compute it on the input image and on the reference, but we need to add the background
+            #x_fake = x_fake * mask + (1-mask)*x_real
+            for index in range(x_fake.shape[0]):
+                x_fake[index] = x_fake[index]*attentions[index] + backgrounds[index]
     out = nets.discriminator(x_fake, y_trg)
     loss_fake = adv_loss(out, 0)
 
@@ -273,7 +293,7 @@ def compute_d_loss(nets, args, x_real, y_org, y_trg, mask, background, z_trg=Non
                        fake=loss_fake.item(),
                        reg=loss_reg.item())
 
-def compute_g_loss(nets, args, x_real, y_org, y_trg, mask, background, z_trgs=None, x_refs=None, masks=None):
+def compute_g_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_trgs=None, x_refs=None, masks=None):
     assert (z_trgs is None) != (x_refs is None)
     if z_trgs is not None:
         z_trg, z_trg2 = z_trgs
@@ -289,10 +309,12 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, mask, background, z_trgs=No
     # generate fake image
     x_fake = nets.generator(x_real, s_trg, masks=masks)
 
-    # mask fake image with attention
-    #x_fake = x_fake * mask + (1-mask)*x_real
-    x_fake = x_fake*mask  + background
-    
+    if args.background_separation:
+        # mask fake image with attention
+        #x_fake = x_fake * mask + (1-mask)*x_real
+        for index in range(x_fake.shape[0]):
+            x_fake[index] = x_fake[index]*attentions[index]  + backgrounds[index]
+        
     # adversarial loss
     out = nets.discriminator(x_fake, y_trg)
     loss_adv = adv_loss(out, 1)
@@ -307,8 +329,11 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, mask, background, z_trgs=No
     else:
         s_trg2 = nets.style_encoder(x_ref2, y_trg)
     x_fake2 = nets.generator(x_real, s_trg2, masks=masks)
-    # x_fake2 = x_fake2 * mask + (1-mask)*x_real
-    x_fake2 = x_fake2*mask + background
+
+    if args.background_separation:
+        # x_fake2 = x_fake2 * mask + (1-mask)*x_real
+        for index in range(x_fake2.shape[0]):
+            x_fake2[index] = x_fake2[index]*attentions[index]  + backgrounds[index]
     x_fake2 = x_fake2.detach()
     loss_ds = torch.mean(torch.abs(x_fake - x_fake2))
 
@@ -316,7 +341,9 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, mask, background, z_trgs=No
     masks = nets.fan.get_heatmap(x_fake) if args.w_hpf > 0 else None
     s_org = nets.style_encoder(x_real, y_org)
     x_rec = nets.generator(x_fake, s_org, masks=masks)
-    x_rec = x_rec*mask + background
+    if args.background_separation:
+        for index in range(x_rec.shape[0]):
+            x_rec[index] = x_rec[index]*attentions[index]  + backgrounds[index]
     loss_cyc = torch.mean(torch.abs(x_rec - x_real))
 
     # visualization for debugging    

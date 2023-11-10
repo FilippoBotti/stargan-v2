@@ -101,7 +101,7 @@ def translate_using_latent(nets, args, x_src, y_trg_list, z_trg_list, psi, filen
 
 
 @torch.no_grad()
-def translate_using_reference(nets, args, x_src, x_ref, y_ref, stego_model, filename):
+def translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, stego_model=None):
     
 
     attentions = []
