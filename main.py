@@ -83,6 +83,11 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
+    # background arguments
+    parser.add_argument('--stego_path', type=str, default='expr/checkpoints/cocostuff.ckpt')
+    parser.add_argument('--mask_input', action='store_true', help='Use stego to mask inputs')
+    parser.add_argument('--mask_reference', action='store_true', help='Use stego to mask references')
+
     # model arguments
     parser.add_argument('--img_size', type=int, default=256,
                         help='Image resolution')
@@ -172,7 +177,6 @@ if __name__ == '__main__':
     parser.add_argument('--wing_path', type=str, default='expr/checkpoints/wing.ckpt')
     parser.add_argument('--lm_path', type=str, default='expr/checkpoints/celeba_lm_mean.npz')
 
-    parser.add_argument('--stego_path', type=str, default='expr/checkpoints/cocostuff.ckpt')
     # step size
     parser.add_argument('--print_every', type=int, default=10)
     parser.add_argument('--sample_every', type=int, default=5000)

@@ -131,26 +131,26 @@ class Solver(nn.Module):
             # compute mask based on reference
             # Here we need to compute the attention on the reference style images and use the maskerate style images 
             # to generate fake images based on input
-            with torch.no_grad():
-                # first reference
-                code_A = self.stego_model(x_ref)
-                linear_probs_A = torch.log_softmax(self.stego_model.linear_probe(code_A), dim=1).cpu()
-                single_img_A = x_ref[0].cpu()
-                linear_pred_A = dense_crf(single_img_A, linear_probs_A[0]).argmax(0)
-                mask_A = (linear_pred_A == 7)*1
-                #ho la maschera, la converto in pytorch e genero quindi l'attenzione
-                ref_attention = torch.tensor(mask_A).cuda()
-                x_ref = x_ref * ref_attention
+            # with torch.no_grad():
+            #     # first reference
+            #     code_A = self.stego_model(x_ref)
+            #     linear_probs_A = torch.log_softmax(self.stego_model.linear_probe(code_A), dim=1).cpu()
+            #     single_img_A = x_ref[0].cpu()
+            #     linear_pred_A = dense_crf(single_img_A, linear_probs_A[0]).argmax(0)
+            #     mask_A = (linear_pred_A == 7)*1
+            #     #ho la maschera, la converto in pytorch e genero quindi l'attenzione
+            #     ref_attention = torch.tensor(mask_A).cuda()
+            #     x_ref = x_ref * ref_attention
 
-                # second reference
-                code_A = self.stego_model(x_ref2)
-                linear_probs_A = torch.log_softmax(self.stego_model.linear_probe(code_A), dim=1).cpu()
-                single_img_A = x_ref2[0].cpu()
-                linear_pred_A = dense_crf(single_img_A, linear_probs_A[0]).argmax(0)
-                mask_A = (linear_pred_A == 7)*1
-                #ho la maschera, la converto in pytorch e genero quindi l'attenzione
-                ref2_attention = torch.tensor(mask_A).cuda()
-                x_ref2 = x_ref2 * ref2_attention
+            #     # second reference
+            #     code_A = self.stego_model(x_ref2)
+            #     linear_probs_A = torch.log_softmax(self.stego_model.linear_probe(code_A), dim=1).cpu()
+            #     single_img_A = x_ref2[0].cpu()
+            #     linear_pred_A = dense_crf(single_img_A, linear_probs_A[0]).argmax(0)
+            #     mask_A = (linear_pred_A == 7)*1
+            #     #ho la maschera, la converto in pytorch e genero quindi l'attenzione
+            #     ref2_attention = torch.tensor(mask_A).cuda()
+            #     x_ref2 = x_ref2 * ref2_attention
 
             
             # train the discriminator
