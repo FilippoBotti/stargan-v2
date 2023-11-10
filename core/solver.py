@@ -284,9 +284,6 @@ def compute_d_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_
             # remove attention cause we compute it on the input image and on the reference, but we need to add the background
             #x_fake = x_fake * mask + (1-mask)*x_real
             for index in range(x_fake.shape[0]):
-                print(x_real.shape)
-                print(attentions[index].shape)
-                print(backgrounds[index].shape)
                 x_fake[index] = x_fake[index]*attentions[index] + backgrounds[index]
     out = nets.discriminator(x_fake, y_trg)
     loss_fake = adv_loss(out, 0)
@@ -350,23 +347,23 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_
     loss_cyc = torch.mean(torch.abs(x_rec - x_real))
 
     # visualization for debugging    
-    with torch.no_grad():
-      fig, ax = plt.subplots(args.batch_size,6, figsize=(5*3,5))
-      for index in range(args.batch_size):
-        ax[index].imshow(denormalize(x_real[index]).squeeze().permute(1,2,0).cpu().numpy())
-        ax[index].set_title("x_real")
-        ax[index].imshow(attentions[index].cpu().numpy())
-        ax[index].set_title("mask")
-        ax[index].imshow(denormalize(x_fake[index])[0].permute(1,2,0).cpu())
-        ax[index].set_title("x_fake")          
-        ax[index].imshow(denormalize(x_fake2[index])[0].permute(1,2,0).cpu())
-        ax[index].set_title("x_fake2")
-        ax[index].imshow(denormalize(x_rec[index])[0].permute(1,2,0).cpu())
-        ax[index].set_title("x_rec")
-        ax[index].imshow(denormalize(backgrounds[index])[0].permute(1,2,0).cpu())
-        ax[index].set_title("background")
-      remove_axes(ax)
-      fig.savefig('A-B.png')
+    # with torch.no_grad():
+    #   fig, ax = plt.subplots(args.batch_size,6, figsize=(5*3,10))
+    #   for index in range(args.batch_size):
+    #     ax[index,0].imshow(denormalize(x_real[index]).squeeze().permute(1,2,0).cpu().numpy())
+    #     ax[index,0].set_title("x_real")
+    #     ax[index,1].imshow(attentions[index].cpu().numpy())
+    #     ax[index,1].set_title("mask")
+    #     ax[index,2].imshow(denormalize(x_fake[index]).permute(1,2,0).cpu())
+    #     ax[index,2].set_title("x_fake")          
+    #     ax[index,3].imshow(denormalize(x_fake2[index]).permute(1,2,0).cpu())
+    #     ax[index,3].set_title("x_fake2")
+    #     ax[index,4].imshow(denormalize(x_rec[index]).permute(1,2,0).cpu())
+    #     ax[index,4].set_title("x_rec")
+    #     ax[index,5].imshow(denormalize(backgrounds[index]).permute(1,2,0).cpu())
+    #     ax[index,5].set_title("background")
+    #   remove_axes(ax)
+    #   fig.savefig('A-B.png')
 
     loss = loss_adv + args.lambda_sty * loss_sty \
         - args.lambda_ds * loss_ds + args.lambda_cyc * loss_cyc
