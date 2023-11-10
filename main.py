@@ -186,7 +186,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     print("Checkpoints dir: " , args.checkpoint_dir)
-    print("Background separation: ", args.backround_separation)
+    print("Background separation: ", args.background_separation)
     print("Mask input: ", args.mask_input)
     print("Mask reference: ", args.mask_reference)
     main(args)
