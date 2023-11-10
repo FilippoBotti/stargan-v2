@@ -102,26 +102,47 @@ def translate_using_latent(nets, args, x_src, y_trg_list, z_trg_list, psi, filen
 
 @torch.no_grad()
 def translate_using_reference(nets, args, x_src, x_ref, y_ref, stego_model, filename):
+    
+
+    attentions = []
+    backgrounds = []
+    for index in range(x_ref.shape[0]):
+      with torch.no_grad():
+          code_A = stego_model(x_ref)
+          linear_probs_A = torch.log_softmax(stego_model.linear_probe(code_A), dim=1).cpu()
+          single_img_A = x_ref[index].cpu()
+          linear_pred_A = dense_crf(single_img_A, linear_probs_A[index]).argmax(0)
+          mask_A = (linear_pred_A == 7)*1
+          #ho la maschera, la converto in pytorch e genero quindi l'attenzione
+          attention = torch.tensor(mask_A).cuda()
+          x_ref[index] = x_ref[index]*attention
+
+    for index in range(x_src.shape[0]):
+      with torch.no_grad():
+          code_A = stego_model(x_src)
+          linear_probs_A = torch.log_softmax(stego_model.linear_probe(code_A), dim=1).cpu()
+          single_img_A = x_src[index].cpu()
+          linear_pred_A = dense_crf(single_img_A, linear_probs_A[index]).argmax(0)
+          mask_A = (linear_pred_A == 7)*1
+          #ho la maschera, la converto in pytorch e genero quindi l'attenzione
+          attention = torch.tensor(mask_A).cuda()
+          attentions.append(attention)
+          backgrounds.append(x_src[index]*(1-attention))
+          x_src[index] = x_src[index]*attention
+
     N, C, H, W = x_src.size()
     wb = torch.ones(1, C, H, W).to(x_src.device)
     x_src_with_wb = torch.cat([wb, x_src], dim=0)
-
     masks = nets.fan.get_heatmap(x_src) if args.w_hpf > 0 else None
     s_ref = nets.style_encoder(x_ref, y_ref)
     s_ref_list = s_ref.unsqueeze(1).repeat(1, N, 1)
     x_concat = [x_src_with_wb]
 
-    with torch.no_grad():
-        code_A = stego_model(x_src)
-        linear_probs_A = torch.log_softmax(stego_model.linear_probe(code_A), dim=1).cpu()
-        single_img_A = x_src[0].cpu()
-        linear_pred_A = dense_crf(single_img_A, linear_probs_A[0]).argmax(0)
-        mask_A = (linear_pred_A == 7)*1
-        #ho la maschera, la converto in pytorch e genero quindi l'attenzione
-        attention = torch.tensor(mask_A).cuda()
+    
     for i, s_ref in enumerate(s_ref_list):
         x_fake = nets.generator(x_src, s_ref, masks=masks)
-        x_fake = x_fake*attention + (1-attention)*x_src
+        for index in range(x_fake.shape[0]):
+          x_fake[index] = x_fake[index]#*attentions[index] #+ backgrounds[index]
         x_fake_with_ref = torch.cat([x_ref[i:i+1], x_fake], dim=0)
         x_concat += [x_fake_with_ref]
 
