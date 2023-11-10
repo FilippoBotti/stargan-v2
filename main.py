@@ -185,4 +185,8 @@ if __name__ == '__main__':
     parser.add_argument('--eval_every', type=int, default=50000)
 
     args = parser.parse_args()
+    print("Checkpoints dir: " , args.checkpoint_dir)
+    print("Background separation: ", args.backround_separation)
+    print("Mask input: ", args.mask_input)
+    print("Mask reference: ", args.mask_reference)
     main(args)
