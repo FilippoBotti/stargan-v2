@@ -79,14 +79,14 @@ class ReferenceDataset(data.Dataset):
         return len(self.targets)
 
 class CustomReferenceDataset(data.Dataset):
-    def __init__(self, root, mask_dir, img_size, transform=None,):
+    def __init__(self, root, mask_dir, img_size, transform=None):
         self.samples, self.masks, self.targets = self._make_dataset(root, mask_dir)
         self.transform = transform
         self.img_size = img_size
 
     def _make_dataset(self, root, root_mask_dir):
         domains = os.listdir(root)
-        fnames, fnames2, masks, labels = [], [], [], []
+        fnames, fnames2, masks, masks2, labels = [], [], [], [], []
         for idx, domain in enumerate(sorted(domains)):
             class_dir = os.path.join(root, domain)
             mask_dir = os.path.join(root_mask_dir, domain)
@@ -94,15 +94,20 @@ class CustomReferenceDataset(data.Dataset):
             mask_fnames = listdir(mask_dir)
             cls_fnames.sort()
             mask_fnames.sort()
+
             fnames += cls_fnames
-            fn2_index = random.randint(len(cls_fnames))
-            fnames2 += cls_fnames[fn2_index]
-            masks2 += mask_fnames[fn2_index]
             masks+= mask_fnames
+
+            fnames2 = fnames
+            masks2 = masks
+            c = list(zip(fnames2, masks2))
+            random.shuffle(c)
+            fnames2, masks2 = zip(*c)
             labels += [idx] * len(cls_fnames)
         return list(zip(fnames, fnames2)), list(zip(masks,masks2)), labels
 
     def __getitem__(self, index):
+        print(len(self.samples))
         fname, fname2 = self.samples[index]
         mask, mask2 = self.masks[index]
         label = self.targets[index]

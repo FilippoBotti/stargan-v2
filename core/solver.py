@@ -7,13 +7,13 @@ This work is licensed under the Creative Commons Attribution-NonCommercial
 http://creativecommons.org/licenses/by-nc/4.0/ or send a letter to
 Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.
 """
-from torchvision.utils import save_image
+
 import os
 from os.path import join as ospj
 import time
 import datetime
 from munch import Munch
-import matplotlib.pyplot as plt
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -23,10 +23,7 @@ from core.checkpoint import CheckpointIO
 from core.data_loader import InputFetcher
 import core.utils as utils
 from metrics.eval import calculate_metrics
-from STEGO.src.train_segmentation import LitUnsupervisedSegmenter
-from STEGO.src.crf import dense_crf
-from STEGO.src.utils import unnorm, remove_axes, denormalize
-from torchvision import transforms
+
 
 class Solver(nn.Module):
     def __init__(self, args):
@@ -35,7 +32,6 @@ class Solver(nn.Module):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.nets, self.nets_ema = build_model(args)
-        #print(self.stego_model)
         # below setattrs are to make networks be children of Solver, e.g., for self.to(self.device)
         for name, module in self.nets.items():
             utils.print_network(module, name)
@@ -68,11 +64,6 @@ class Solver(nn.Module):
                 print('Initializing %s...' % name)
                 network.apply(utils.he_init)
 
-        if args.background_separation:
-            print("Use stego to perform background separation")
-            self.stego_model = LitUnsupervisedSegmenter.load_from_checkpoint(args.stego_path).cuda()
-        
-
     def _save_checkpoint(self, step):
         for ckptio in self.ckptios:
             ckptio.save(step)
@@ -85,8 +76,6 @@ class Solver(nn.Module):
         for optim in self.optims.values():
             optim.zero_grad()
 
-
-
     def train(self, loaders):
         args = self.args
         nets = self.nets
@@ -94,8 +83,8 @@ class Solver(nn.Module):
         optims = self.optims
 
         # fetch random validation images for debugging
-        fetcher = InputFetcher(args,loaders.src, loaders.ref, args.latent_dim, 'train')
-        fetcher_val = InputFetcher(args,loaders.val, None, args.latent_dim, 'val')
+        fetcher = InputFetcher(loaders.src, loaders.ref, args.latent_dim, 'train')
+        fetcher_val = InputFetcher(loaders.val, None, args.latent_dim, 'val')
         inputs_val = next(fetcher_val)
 
         # resume training if necessary
@@ -110,54 +99,28 @@ class Solver(nn.Module):
         for i in range(args.resume_iter, args.total_iters):
             # fetch images and labels
             inputs = next(fetcher)
-            x_real, y_org, x_mask = inputs.x_src, inputs.y_src, inputs.x_mask
-            
-            if args.background_separation:
-                # compute mask based on input
-                # The attention based on input has always to be computed cause we want to maskerate the output based on the input attention
-                attentions = []
-                backgrounds = []
-                
-                attention = x_mask
-                background = x_real *(1-attention)
-
-                attentions.append(attention)
-                backgrounds.append(background)
-
-                if args.mask_input:
-                    #mask input
-                    x_real= x_real*attention
-
-            if args.mask_reference: 
-                x_ref, x_ref2, x_ref_mask, x_ref2_mask, y_trg = inputs.x_ref, inputs.x_ref2, inputs.x_ref_mask, inputs.x_ref2_mask, inputs.y_ref
-            else:
-                x_ref, x_ref2, y_trg = inputs.x_ref, inputs.x_ref2, inputs.y_ref
+            x_real, y_org = inputs.x_src, inputs.y_src
+            x_ref, x_ref2, y_trg = inputs.x_ref, inputs.x_ref2, inputs.y_ref
             z_trg, z_trg2 = inputs.z_trg, inputs.z_trg2
 
             masks = nets.fan.get_heatmap(x_real) if args.w_hpf > 0 else None
 
-            if args.background_separation and args.mask_reference:
-                    x_ref = x_ref * x_ref_mask
-                    x_ref2 = x_ref2 * x_ref2_mask
-
-
-            
             # train the discriminator
             d_loss, d_losses_latent = compute_d_loss(
-                    nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_trg=z_trg, masks=masks)
+                nets, args, x_real, y_org, y_trg, z_trg=z_trg, masks=masks)
             self._reset_grad()
             d_loss.backward()
             optims.discriminator.step()
 
             d_loss, d_losses_ref = compute_d_loss(
-                nets, args, x_real, y_org, y_trg, attentions, backgrounds, x_ref=x_ref, masks=masks)
+                nets, args, x_real, y_org, y_trg, x_ref=x_ref, masks=masks)
             self._reset_grad()
             d_loss.backward()
             optims.discriminator.step()
 
             # train the generator
             g_loss, g_losses_latent = compute_g_loss(
-                nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_trgs=[z_trg, z_trg2], masks=masks)
+                nets, args, x_real, y_org, y_trg, z_trgs=[z_trg, z_trg2], masks=masks)
             self._reset_grad()
             g_loss.backward()
             optims.generator.step()
@@ -165,8 +128,7 @@ class Solver(nn.Module):
             optims.style_encoder.step()
 
             g_loss, g_losses_ref = compute_g_loss(
-                nets, args, x_real, y_org, y_trg, attentions, backgrounds, x_refs=[x_ref, x_ref2], masks=masks)
-            
+                nets, args, x_real, y_org, y_trg, x_refs=[x_ref, x_ref2], masks=masks)
             self._reset_grad()
             g_loss.backward()
             optims.generator.step()
@@ -195,18 +157,18 @@ class Solver(nn.Module):
                 print(log)
 
             # generate images for debugging
-            # if (i+1) % args.sample_every == 0:
-            #     os.makedirs(args.sample_dir, exist_ok=True)
-            #     utils.debug_image(nets_ema, args, inputs=inputs_val, step=i+1)
+            if (i+1) % args.sample_every == 0:
+                os.makedirs(args.sample_dir, exist_ok=True)
+                utils.debug_image(nets_ema, args, inputs=inputs_val, step=i+1)
 
             # save model checkpoints
             if (i+1) % args.save_every == 0:
                 self._save_checkpoint(step=i+1)
 
             # compute FID and LPIPS if necessary
-            # if (i+1) % args.eval_every == 0:
-            #     calculate_metrics(nets_ema, args, i+1, mode='latent')
-            #     calculate_metrics(nets_ema, args, i+1, mode='reference')
+            if (i+1) % args.eval_every == 0:
+                calculate_metrics(nets_ema, args, i+1, mode='latent')
+                calculate_metrics(nets_ema, args, i+1, mode='reference')
 
     @torch.no_grad()
     def sample(self, loaders):
@@ -220,10 +182,7 @@ class Solver(nn.Module):
 
         fname = ospj(args.result_dir, 'reference.jpg')
         print('Working on {}...'.format(fname))
-        if args.background_separation:
-            utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, self.stego_model)
-        else:
-            utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname)
+        utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname)
 
         fname = ospj(args.result_dir, 'video_ref.mp4')
         print('Working on {}...'.format(fname))
@@ -238,7 +197,8 @@ class Solver(nn.Module):
         calculate_metrics(nets_ema, args, step=resume_iter, mode='latent')
         calculate_metrics(nets_ema, args, step=resume_iter, mode='reference')
 
-def compute_d_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_trg=None, x_ref=None, masks=None):
+
+def compute_d_loss(nets, args, x_real, y_org, y_trg, z_trg=None, x_ref=None, masks=None):
     assert (z_trg is None) != (x_ref is None)
     # with real images
     x_real.requires_grad_()
@@ -252,14 +212,8 @@ def compute_d_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_
             s_trg = nets.mapping_network(z_trg, y_trg)
         else:  # x_ref is not None
             s_trg = nets.style_encoder(x_ref, y_trg)
-        
+
         x_fake = nets.generator(x_real, s_trg, masks=masks)
-        
-        if args.background_separation:
-            # remove attention cause we compute it on the input image and on the reference, but we need to add the background
-            #x_fake = x_fake * mask + (1-mask)*x_real
-            for index in range(x_fake.shape[0]):
-                x_fake[index] = x_fake[index]*attentions[index] + backgrounds[index]
     out = nets.discriminator(x_fake, y_trg)
     loss_fake = adv_loss(out, 0)
 
@@ -268,29 +222,21 @@ def compute_d_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_
                        fake=loss_fake.item(),
                        reg=loss_reg.item())
 
-def compute_g_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_trgs=None, x_refs=None, masks=None):
+
+def compute_g_loss(nets, args, x_real, y_org, y_trg, z_trgs=None, x_refs=None, masks=None):
     assert (z_trgs is None) != (x_refs is None)
     if z_trgs is not None:
         z_trg, z_trg2 = z_trgs
     if x_refs is not None:
         x_ref, x_ref2 = x_refs
 
-    
+    # adversarial loss
     if z_trgs is not None:
         s_trg = nets.mapping_network(z_trg, y_trg)
     else:
         s_trg = nets.style_encoder(x_ref, y_trg)
 
-    # generate fake image
     x_fake = nets.generator(x_real, s_trg, masks=masks)
-
-    if args.background_separation:
-        # mask fake image with attention
-        #x_fake = x_fake * mask + (1-mask)*x_real
-        for index in range(x_fake.shape[0]):
-            x_fake[index] = x_fake[index]*attentions[index]  + backgrounds[index]
-        
-    # adversarial loss
     out = nets.discriminator(x_fake, y_trg)
     loss_adv = adv_loss(out, 1)
 
@@ -304,11 +250,6 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_
     else:
         s_trg2 = nets.style_encoder(x_ref2, y_trg)
     x_fake2 = nets.generator(x_real, s_trg2, masks=masks)
-
-    if args.background_separation:
-        # x_fake2 = x_fake2 * mask + (1-mask)*x_real
-        for index in range(x_fake2.shape[0]):
-            x_fake2[index] = x_fake2[index]*attentions[index]  + backgrounds[index]
     x_fake2 = x_fake2.detach()
     loss_ds = torch.mean(torch.abs(x_fake - x_fake2))
 
@@ -316,36 +257,14 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_
     masks = nets.fan.get_heatmap(x_fake) if args.w_hpf > 0 else None
     s_org = nets.style_encoder(x_real, y_org)
     x_rec = nets.generator(x_fake, s_org, masks=masks)
-    if args.background_separation:
-        for index in range(x_rec.shape[0]):
-            x_rec[index] = x_rec[index]*attentions[index]  + backgrounds[index]
     loss_cyc = torch.mean(torch.abs(x_rec - x_real))
-
-    # visualization for debugging    
-    # with torch.no_grad():
-    #   fig, ax = plt.subplots(args.batch_size,6, figsize=(5*3,10))
-    #   for index in range(args.batch_size):
-    #     ax[index,0].imshow(denormalize(x_real[index]).squeeze().permute(1,2,0).cpu().numpy())
-    #     ax[index,0].set_title("x_real")
-    #     ax[index,1].imshow(attentions[index].cpu().numpy())
-    #     ax[index,1].set_title("mask")
-    #     ax[index,2].imshow(denormalize(x_fake[index]).permute(1,2,0).cpu())
-    #     ax[index,2].set_title("x_fake")          
-    #     ax[index,3].imshow(denormalize(x_fake2[index]).permute(1,2,0).cpu())
-    #     ax[index,3].set_title("x_fake2")
-    #     ax[index,4].imshow(denormalize(x_rec[index]).permute(1,2,0).cpu())
-    #     ax[index,4].set_title("x_rec")
-    #     ax[index,5].imshow(denormalize(backgrounds[index]).permute(1,2,0).cpu())
-    #     ax[index,5].set_title("background")
-    #   remove_axes(ax)
-    #   fig.savefig('A-B.png')
 
     loss = loss_adv + args.lambda_sty * loss_sty \
         - args.lambda_ds * loss_ds + args.lambda_cyc * loss_cyc
     return loss, Munch(adv=loss_adv.item(),
-                      sty=loss_sty.item(),
-                      ds=loss_ds.item(),
-                      cyc=loss_cyc.item())
+                       sty=loss_sty.item(),
+                       ds=loss_ds.item(),
+                       cyc=loss_cyc.item())
 
 
 def moving_average(model, model_test, beta=0.999):
