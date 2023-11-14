@@ -84,12 +84,11 @@ class CustomReferenceDataset(data.Dataset):
         self.transform = transform
         self.img_size = img_size
 
-    def _make_dataset(self, root, root_mask_dir):
+    def _make_dataset(self, root):
         domains = os.listdir(root)
         fnames, fnames2, masks, masks2, labels = [], [], [], [], []
         for idx, domain in enumerate(sorted(domains)):
             class_dir = os.path.join(root, domain)
-            mask_dir = os.path.join(root_mask_dir, domain)
             cls_fnames = listdir(class_dir)
             mask_fnames = listdir(mask_dir)
             cls_fnames.sort()
@@ -104,20 +103,18 @@ class CustomReferenceDataset(data.Dataset):
             random.shuffle(c)
             fnames2, masks2 = zip(*c)
             labels += [idx] * len(cls_fnames)
-        return list(zip(fnames, fnames2)), list(zip(masks,masks2)), labels
+        return list(zip(fnames, fnames2)), labels
 
     def __getitem__(self, index):
         print(len(self.samples))
         fname, fname2 = self.samples[index]
-        mask, mask2 = self.masks[index]
         label = self.targets[index]
         img = Image.open(fname).convert('RGB')
         img2 = Image.open(fname2).convert('RGB')
-        mask = Image.open(mask).convert('RGB')
-        mask2 = Image.open(mask2).convert('RGB')
-        img,mask = random_transform(img,mask)
-        img2,mask2 = random_transform(img2,mask2)
-        return img, img2, mask, mask2, label
+        if self.transform is not None:
+            img = self.transform(img)
+            img2 = self.transform(img2)
+        return img, img2, label
 
     def __len__(self):
         return len(self.targets)
@@ -197,7 +194,7 @@ def _make_balanced_sampler(labels):
     return WeightedRandomSampler(weights, len(weights))
 
 
-def get_train_loader(args, root, mask_dir, which='source', img_size=256,
+def get_train_loader(root, mask_dir, which='source', img_size=256,
                      batch_size=8, prob=0.5, num_workers=4):
     print('Preparing DataLoader to fetch %s images '
           'during the training phase...' % which)
@@ -218,10 +215,7 @@ def get_train_loader(args, root, mask_dir, which='source', img_size=256,
     if which == 'source':
         dataset = CustomDataset(root, mask_dir, img_size, transform)
     elif which == 'reference':
-        if args.mask_reference:
-            dataset = CustomReferenceDataset(root, mask_dir, img_size, transform)
-        else:
-            dataset = ReferenceDataset(root,transform)
+        dataset = CustomReferenceDataset(root, mask_dir, img_size, transform)
     else:
         raise NotImplementedError
 
@@ -282,8 +276,7 @@ def get_test_loader(root, mask_dir, img_size=256, batch_size=32,
 
 
 class InputFetcher:
-    def __init__(self, args, loader, loader_ref=None, latent_dim=16, mode=''):
-        self.args = args
+    def __init__(self, loader, loader_ref=None, latent_dim=16, mode=''):
         self.loader = loader
         self.loader_ref = loader_ref
         self.latent_dim = latent_dim
@@ -299,40 +292,22 @@ class InputFetcher:
         return x, mask, y
 
     def _fetch_refs(self):
-        if self.args.mask_reference:
-            try:
-                x, x2, x_mask, x_mask2, y = next(self.iter_ref)
-            except (AttributeError, StopIteration):
-                self.iter_ref = iter(self.loader_ref)
-                x, x2, x_mask, x_mask2, y = next(self.iter_ref)
-            return x, x2, x_mask, x_mask2, y 
-        else:
-            try:
-                x, x2, y = next(self.iter_ref)
-            except (AttributeError, StopIteration):
-                self.iter_ref = iter(self.loader_ref)
-                x, x2, y = next(self.iter_ref)
-            return x, x2, y
+        try:
+            x, x2, y = next(self.iter_ref)
+        except (AttributeError, StopIteration):
+            self.iter_ref = iter(self.loader_ref)
+            x, x2, y = next(self.iter_ref)
+        return x, x2, y
 
     def __next__(self):
         x, mask, y = self._fetch_inputs()
         if self.mode == 'train':
-            if self.args.mask_reference:
-                x_ref, x_ref2, x_ref_mask, x_ref2_mask, y_ref = self._fetch_refs()
-            else:
-                x_ref, x_ref2, y_ref = self._fetch_refs()
+            x_ref, x_ref2, y_ref = self._fetch_refs()
             z_trg = torch.randn(x.size(0), self.latent_dim)
             z_trg2 = torch.randn(x.size(0), self.latent_dim)
-
-            if self.args.mask_reference:
-                inputs = Munch(x_src=x, x_mask=mask, y_src=y, y_ref=y_ref,
-                           x_ref=x_ref, x_ref_mask=x_ref_mask, x_ref2=x_ref2,
-                           x_ref2_mask=x_ref2_mask,z_trg=z_trg, z_trg2=z_trg2)
-            else :
-                inputs = Munch(x_src=x, x_mask=mask, y_src=y, y_ref=y_ref,
+            inputs = Munch(x_src=x, x_mask=mask, y_src=y, y_ref=y_ref,
                            x_ref=x_ref, x_ref2=x_ref2,
                            z_trg=z_trg, z_trg2=z_trg2)
-                
         elif self.mode == 'val':
             x_ref, mask, y_ref = self._fetch_inputs()
             inputs = Munch(x_src=x, x_mask=mask, y_src=y,

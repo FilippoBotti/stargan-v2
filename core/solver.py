@@ -100,14 +100,65 @@ class Solver(nn.Module):
             # fetch images and labels
             inputs = next(fetcher)
             x_real, y_org = inputs.x_src, inputs.y_src
+            
+            if args.background_separation:
+                # compute mask based on input
+                # The attention based on input has always to be computed cause we want to maskerate the output based on the input attention
+                attentions = []
+                backgrounds = []
+                with torch.no_grad():
+                    code_A = self.stego_model(x_real)
+                    linear_probs_A = torch.log_softmax(self.stego_model.linear_probe(code_A), dim=1).cpu()
+                    # for every image in batch_size
+                    for index in range(x_real.shape[0]):
+                        single_img_A = x_real[index].cpu()
+                        linear_pred_A = dense_crf(single_img_A, linear_probs_A[index]).argmax(0)
+                        mask_A = (linear_pred_A == 7)*1
+
+                        attention = torch.tensor(mask_A).cuda()
+                        background = x_real[index] *(1-attention)
+
+                        attentions.append(attention)
+                        backgrounds.append(background)
+                        if args.mask_input:
+                            #mask input
+                            x_real[index] = x_real[index]*attention
+
             x_ref, x_ref2, y_trg = inputs.x_ref, inputs.x_ref2, inputs.y_ref
             z_trg, z_trg2 = inputs.z_trg, inputs.z_trg2
 
             masks = nets.fan.get_heatmap(x_real) if args.w_hpf > 0 else None
 
+            if args.background_separation and args.mask_reference:
+                # compute mask based on reference
+                # Here we need to compute the attention on the reference style images and use the maskerate style images 
+                # to generate fake images based on input
+                with torch.no_grad():
+                    # first reference
+                    code_A = self.stego_model(x_ref)
+                    linear_probs_A = torch.log_softmax(self.stego_model.linear_probe(code_A), dim=1).cpu()
+                    # for images in batch size
+                    for index in range(x_ref.shape[0]):
+                        single_img_A = x_ref[index].cpu()
+                        linear_pred_A = dense_crf(single_img_A, linear_probs_A[index]).argmax(0)
+                        mask_A = (linear_pred_A == 7)*1
+                        ref_attention = torch.tensor(mask_A).cuda()
+                        x_ref[index] = x_ref[index] * ref_attention
+
+                    # second reference
+                    code_A = self.stego_model(x_ref2)
+                    linear_probs_A = torch.log_softmax(self.stego_model.linear_probe(code_A), dim=1).cpu()
+                    for index in range(x_ref2.shape[0]):
+                        single_img_A = x_ref2[index].cpu()
+                        linear_pred_A = dense_crf(single_img_A, linear_probs_A[index]).argmax(0)
+                        mask_A = (linear_pred_A == 7)*1
+                        ref2_attention = torch.tensor(mask_A).cuda()
+                        x_ref2[index] = x_ref2[index] * ref2_attention
+
+            
             # train the discriminator
             d_loss, d_losses_latent = compute_d_loss(
-                nets, args, x_real, y_org, y_trg, z_trg=z_trg, masks=masks)
+                nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_trg=z_trg, masks=masks)
             self._reset_grad()
             d_loss.backward()
             optims.discriminator.step()
