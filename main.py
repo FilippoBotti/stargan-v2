@@ -40,18 +40,21 @@ def main(args):
         assert len(subdirs(args.train_img_dir)) == args.num_domains
         assert len(subdirs(args.val_img_dir)) == args.num_domains
         loaders = Munch(src=get_train_loader(root=args.train_img_dir,
+                                             mask_dir = args.train_mask_dir,
                                              which='source',
                                              img_size=args.img_size,
                                              batch_size=args.batch_size,
                                              prob=args.randcrop_prob,
                                              num_workers=args.num_workers),
                         ref=get_train_loader(root=args.train_img_dir,
+                                             mask_dir = args.train_mask_dir,
                                              which='reference',
                                              img_size=args.img_size,
                                              batch_size=args.batch_size,
                                              prob=args.randcrop_prob,
                                              num_workers=args.num_workers),
                         val=get_test_loader(root=args.val_img_dir,
+                                            mask_dir = args.val_mask_dir,
                                             img_size=args.img_size,
                                             batch_size=args.val_batch_size,
                                             shuffle=True,
@@ -61,11 +64,13 @@ def main(args):
         assert len(subdirs(args.src_dir)) == args.num_domains
         assert len(subdirs(args.ref_dir)) == args.num_domains
         loaders = Munch(src=get_test_loader(root=args.src_dir,
+                                            mask_dir = args.train_mask_dir,
                                             img_size=args.img_size,
                                             batch_size=args.val_batch_size,
                                             shuffle=False,
                                             num_workers=args.num_workers),
                         ref=get_test_loader(root=args.ref_dir,
+                                            mask_dir = args.val_mask_dir,
                                             img_size=args.img_size,
                                             batch_size=args.val_batch_size,
                                             shuffle=False,
@@ -151,6 +156,10 @@ if __name__ == '__main__':
     # directory for training
     parser.add_argument('--train_img_dir', type=str, default='data/celeba_hq/train',
                         help='Directory containing training images')
+    parser.add_argument('--train_mask_dir', type=str, default='data/celeba_hq/mask',
+                        help='Directory containing training mask images')
+    parser.add_argument('--val_mask_dir', type=str, default='data/celeba_hq/mask',
+                        help='Directory containing validation mask images')
     parser.add_argument('--val_img_dir', type=str, default='data/celeba_hq/val',
                         help='Directory containing validation images')
     parser.add_argument('--sample_dir', type=str, default='expr/samples',

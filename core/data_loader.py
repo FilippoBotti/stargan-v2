@@ -22,6 +22,7 @@ from torch.utils import data
 from torch.utils.data.sampler import WeightedRandomSampler
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
+import torchvision.transforms.functional as TF
 
 
 def listdir(dname):
@@ -77,6 +78,103 @@ class ReferenceDataset(data.Dataset):
     def __len__(self):
         return len(self.targets)
 
+class CustomReferenceDataset(data.Dataset):
+    def __init__(self, root, mask_dir, img_size, transform=None,):
+        self.samples, self.targets = self._make_dataset(root)
+        self.transform = transform
+        self.img_size = img_size
+
+    def _make_dataset(self, root):
+        domains = os.listdir(root)
+        fnames, fnames2, labels = [], [], []
+        for idx, domain in enumerate(sorted(domains)):
+            class_dir = os.path.join(root, domain)
+            cls_fnames = listdir(class_dir)
+            fnames += cls_fnames
+            fnames2 += random.sample(cls_fnames, len(cls_fnames))
+            labels += [idx] * len(cls_fnames)
+        return list(zip(fnames, fnames2)), labels
+
+    def __getitem__(self, index):
+        fname, fname2 = self.samples[index]
+        label = self.targets[index]
+        img = Image.open(fname).convert('RGB')
+        img2 = Image.open(fname2).convert('RGB')
+        if self.transform is not None:
+            img = self.transform(img)
+            img2 = self.transform(img2)
+        return img, img2, label
+
+    def __len__(self):
+        return len(self.targets)
+    
+class CustomDataset(data.Dataset):
+    def __init__(self, root, mask_dir, img_size, transform=None, test=False):
+        self.samples, self.masks, self.targets = self._make_dataset(root, mask_dir)
+        self.transform = transform
+        self.test = test
+        self.img_size = img_size
+
+    def _make_dataset(self, root, root_mask_dir):
+      domains = os.listdir(root)
+      fnames, masks, labels = [], [], []
+      for idx, domain in enumerate(sorted(domains)):
+          class_dir = os.path.join(root, domain)
+          mask_dir = os.path.join(root_mask_dir, domain)
+          cls_fnames = listdir(class_dir)
+          mask_fnames = listdir(mask_dir)
+          # Ensure that cls_fnames and mask_fnames are sorted in the same order
+          cls_fnames.sort()
+          mask_fnames.sort()
+
+          fnames += cls_fnames
+          masks+= mask_fnames
+          labels += [idx] * len(cls_fnames)
+      return list(fnames), list(masks), labels
+
+
+    def __getitem__(self, index):
+        fname = self.samples[index]
+        label = self.targets[index]
+        mask_fname = self.masks[index]
+        img = Image.open(fname).convert('RGB')
+        mask = Image.open(mask_fname).convert('RGB')
+        if not self.test:
+            img, mask = random_transform(img,mask,self.img_size)
+        if self.test and self.transform != None:
+            img = self.transform(img)
+            mask = self.transform(mask)
+        return img, mask, label
+
+    def __len__(self):
+        return len(self.targets)
+
+def random_transform(A,A_mask, img_size=256, prob=0.5):
+    # Random resized crop
+    i, j, h, w = transforms.RandomResizedCrop.get_params(
+        A, scale=[0.8, 1.0], ratio=[0.9, 1.1])
+    
+    if (random.random() < prob):
+        A = TF.crop(A, i, j, h, w)
+        A_mask = TF.crop(A_mask, i, j, h, w)
+    
+
+    # resize
+    A = TF.resize(A, [img_size,img_size])
+    A_mask = TF.resize(A_mask, [img_size,img_size])
+
+    # Random horizontal flipping
+    if random.random() > 0.5:
+        A = TF.hflip(A)
+        A_mask = TF.hflip(A_mask)
+
+    # to tensor
+    A = TF.to_tensor(A)
+    A_mask = TF.to_tensor(A_mask)
+
+    # normalize only images
+    A = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(A)
+    return A, A_mask
 
 def _make_balanced_sampler(labels):
     class_counts = np.bincount(labels)
@@ -85,7 +183,7 @@ def _make_balanced_sampler(labels):
     return WeightedRandomSampler(weights, len(weights))
 
 
-def get_train_loader(root, which='source', img_size=256,
+def get_train_loader(root, mask_dir, which='source', img_size=256,
                      batch_size=8, prob=0.5, num_workers=4):
     print('Preparing DataLoader to fetch %s images '
           'during the training phase...' % which)
@@ -96,7 +194,6 @@ def get_train_loader(root, which='source', img_size=256,
         lambda x: crop(x) if random.random() < prob else x)
 
     transform = transforms.Compose([
-        rand_crop,
         transforms.Resize([img_size, img_size]),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
@@ -105,9 +202,9 @@ def get_train_loader(root, which='source', img_size=256,
     ])
 
     if which == 'source':
-        dataset = ImageFolder(root, transform)
+        dataset = CustomDataset(root, mask_dir, img_size, transform)
     elif which == 'reference':
-        dataset = ReferenceDataset(root, transform)
+        dataset = CustomReferenceDataset(root, mask_dir, img_size, transform)
     else:
         raise NotImplementedError
 
@@ -149,7 +246,7 @@ def get_eval_loader(root, img_size=256, batch_size=32,
                            drop_last=drop_last)
 
 
-def get_test_loader(root, img_size=256, batch_size=32,
+def get_test_loader(root, mask_dir, img_size=256, batch_size=32,
                     shuffle=True, num_workers=4):
     print('Preparing DataLoader for the generation phase...')
     transform = transforms.Compose([
@@ -159,7 +256,7 @@ def get_test_loader(root, img_size=256, batch_size=32,
                              std=[0.5, 0.5, 0.5]),
     ])
 
-    dataset = ImageFolder(root, transform)
+    dataset = CustomDataset(root, mask_dir, img_size, transform, test=True)
     return data.DataLoader(dataset=dataset,
                            batch_size=batch_size,
                            shuffle=shuffle,
@@ -177,11 +274,11 @@ class InputFetcher:
 
     def _fetch_inputs(self):
         try:
-            x, y = next(self.iter)
+            x, mask, y = next(self.iter)
         except (AttributeError, StopIteration):
             self.iter = iter(self.loader)
-            x, y = next(self.iter)
-        return x, y
+            x, mask, y = next(self.iter)
+        return x, mask, y
 
     def _fetch_refs(self):
         try:
@@ -192,7 +289,7 @@ class InputFetcher:
         return x, x2, y
 
     def __next__(self):
-        x, y = self._fetch_inputs()
+        x, mask, y = self._fetch_inputs()
         if self.mode == 'train':
             x_ref, x_ref2, y_ref = self._fetch_refs()
             z_trg = torch.randn(x.size(0), self.latent_dim)
@@ -201,7 +298,7 @@ class InputFetcher:
                            x_ref=x_ref, x_ref2=x_ref2,
                            z_trg=z_trg, z_trg2=z_trg2)
         elif self.mode == 'val':
-            x_ref, y_ref = self._fetch_inputs()
+            x_ref, mask, y_ref = self._fetch_inputs()
             inputs = Munch(x_src=x, y_src=y,
                            x_ref=x_ref, y_ref=y_ref)
         elif self.mode == 'test':
