@@ -39,21 +39,24 @@ def main(args):
     if args.mode == 'train':
         assert len(subdirs(args.train_img_dir)) == args.num_domains
         assert len(subdirs(args.val_img_dir)) == args.num_domains
-        loaders = Munch(src=get_train_loader(root=args.train_img_dir,
+        loaders = Munch(src=get_train_loader(args=args,
+                                             root=args.train_img_dir,
                                              mask_dir = args.train_mask_dir,
                                              which='source',
                                              img_size=args.img_size,
                                              batch_size=args.batch_size,
                                              prob=args.randcrop_prob,
                                              num_workers=args.num_workers),
-                        ref=get_train_loader(root=args.train_img_dir,
+                        ref=get_train_loader(args=args,
+                                             root=args.train_img_dir,
                                              mask_dir = args.train_mask_dir,
                                              which='reference',
                                              img_size=args.img_size,
                                              batch_size=args.batch_size,
                                              prob=args.randcrop_prob,
                                              num_workers=args.num_workers),
-                        val=get_test_loader(root=args.val_img_dir,
+                        val=get_test_loader(args=args,
+                                            root=args.val_img_dir,
                                             mask_dir = args.val_mask_dir,
                                             img_size=args.img_size,
                                             batch_size=args.val_batch_size,
@@ -63,13 +66,15 @@ def main(args):
     elif args.mode == 'sample':
         assert len(subdirs(args.src_dir)) == args.num_domains
         assert len(subdirs(args.ref_dir)) == args.num_domains
-        loaders = Munch(src=get_test_loader(root=args.src_dir,
+        loaders = Munch(src=get_test_loader(args=args,
+                                            root=args.src_dir,
                                             mask_dir = args.train_mask_dir,
                                             img_size=args.img_size,
                                             batch_size=args.val_batch_size,
                                             shuffle=False,
                                             num_workers=args.num_workers),
-                        ref=get_test_loader(root=args.ref_dir,
+                        ref=get_test_loader(args=args,
+                                            root=args.ref_dir,
                                             mask_dir = args.val_mask_dir,
                                             img_size=args.img_size,
                                             batch_size=args.val_batch_size,
@@ -93,6 +98,7 @@ if __name__ == '__main__':
     parser.add_argument('--background_separation', action='store_true', help='Use background separation')
     parser.add_argument('--mask_input', action='store_true', help='Use stego to mask inputs')
     parser.add_argument('--mask_reference', action='store_true', help='Use stego to mask references')
+    parser.add_argument('--visualize_mask', action='store_true', help='Visualize mask')
 
     # model arguments
     parser.add_argument('--img_size', type=int, default=256,

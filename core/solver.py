@@ -115,18 +115,11 @@ class Solver(nn.Module):
             if args.background_separation:
                 # compute mask based on input
                 # The attention based on input has always to be computed cause we want to maskerate the output based on the input attention
-                attentions = []
-                backgrounds = []
-                
-                attention = x_mask
-                background = x_real *(1-attention)
-
-                attentions.append(attention)
-                backgrounds.append(background)
+                background = x_real *(1-x_mask)
 
                 if args.mask_input:
                     #mask input
-                    x_real= x_real*attention
+                    x_real= x_real*x_mask
 
             if args.mask_reference: 
                 x_ref, x_ref2, x_ref_mask, x_ref2_mask, y_trg = inputs.x_ref, inputs.x_ref2, inputs.x_ref_mask, inputs.x_ref2_mask, inputs.y_ref
@@ -139,25 +132,23 @@ class Solver(nn.Module):
             if args.background_separation and args.mask_reference:
                     x_ref = x_ref * x_ref_mask
                     x_ref2 = x_ref2 * x_ref2_mask
-
-
             
             # train the discriminator
             d_loss, d_losses_latent = compute_d_loss(
-                    nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_trg=z_trg, masks=masks)
+                    nets, args, x_real, y_org, y_trg, x_mask, background, z_trg=z_trg, masks=masks)
             self._reset_grad()
             d_loss.backward()
             optims.discriminator.step()
 
             d_loss, d_losses_ref = compute_d_loss(
-                nets, args, x_real, y_org, y_trg, attentions, backgrounds, x_ref=x_ref, masks=masks)
+                nets, args, x_real, y_org, y_trg, x_mask, background, x_ref=x_ref, masks=masks)
             self._reset_grad()
             d_loss.backward()
             optims.discriminator.step()
 
             # train the generator
             g_loss, g_losses_latent = compute_g_loss(
-                nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_trgs=[z_trg, z_trg2], masks=masks)
+                nets, args, x_real, y_org, y_trg, x_mask, background, z_trgs=[z_trg, z_trg2], masks=masks)
             self._reset_grad()
             g_loss.backward()
             optims.generator.step()
@@ -165,7 +156,7 @@ class Solver(nn.Module):
             optims.style_encoder.step()
 
             g_loss, g_losses_ref = compute_g_loss(
-                nets, args, x_real, y_org, y_trg, attentions, backgrounds, x_refs=[x_ref, x_ref2], masks=masks)
+                nets, args, x_real, y_org, y_trg, x_mask, background, x_refs=[x_ref, x_ref2], masks=masks)
             
             self._reset_grad()
             g_loss.backward()
@@ -238,7 +229,7 @@ class Solver(nn.Module):
         calculate_metrics(nets_ema, args, step=resume_iter, mode='latent')
         calculate_metrics(nets_ema, args, step=resume_iter, mode='reference')
 
-def compute_d_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_trg=None, x_ref=None, masks=None):
+def compute_d_loss(nets, args, x_real, y_org, y_trg, x_mask, background, z_trg=None, x_ref=None, masks=None):
     assert (z_trg is None) != (x_ref is None)
     # with real images
     x_real.requires_grad_()
@@ -258,8 +249,8 @@ def compute_d_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_
         if args.background_separation:
             # remove attention cause we compute it on the input image and on the reference, but we need to add the background
             #x_fake = x_fake * mask + (1-mask)*x_real
-            for index in range(x_fake.shape[0]):
-                x_fake[index] = x_fake[index]*attentions[index] + backgrounds[index]
+            x_fake = x_fake*x_mask + background
+            
     out = nets.discriminator(x_fake, y_trg)
     loss_fake = adv_loss(out, 0)
 
@@ -268,7 +259,7 @@ def compute_d_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_
                        fake=loss_fake.item(),
                        reg=loss_reg.item())
 
-def compute_g_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_trgs=None, x_refs=None, masks=None):
+def compute_g_loss(nets, args, x_real, y_org, y_trg, x_mask, background, z_trgs=None, x_refs=None, masks=None):
     assert (z_trgs is None) != (x_refs is None)
     if z_trgs is not None:
         z_trg, z_trg2 = z_trgs
@@ -287,8 +278,7 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_
     if args.background_separation:
         # mask fake image with attention
         #x_fake = x_fake * mask + (1-mask)*x_real
-        for index in range(x_fake.shape[0]):
-            x_fake[index] = x_fake[index]*attentions[index]  + backgrounds[index]
+        x_fake = x_fake*x_mask  + background
         
     # adversarial loss
     out = nets.discriminator(x_fake, y_trg)
@@ -307,8 +297,7 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_
 
     if args.background_separation:
         # x_fake2 = x_fake2 * mask + (1-mask)*x_real
-        for index in range(x_fake2.shape[0]):
-            x_fake2[index] = x_fake2[index]*attentions[index]  + backgrounds[index]
+        x_fake2 = x_fake2*x_mask + background
     x_fake2 = x_fake2.detach()
     loss_ds = torch.mean(torch.abs(x_fake - x_fake2))
 
@@ -317,28 +306,30 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, attentions, backgrounds, z_
     s_org = nets.style_encoder(x_real, y_org)
     x_rec = nets.generator(x_fake, s_org, masks=masks)
     if args.background_separation:
-        for index in range(x_rec.shape[0]):
-            x_rec[index] = x_rec[index]*attentions[index]  + backgrounds[index]
+        x_rec = x_rec*x_mask  + background
     loss_cyc = torch.mean(torch.abs(x_rec - x_real))
+    
+    if args.visualize_mask and x_refs is not None:
+        with torch.no_grad():
+            fig, ax = plt.subplots(args.batch_size,7, figsize=(5*5,10))
+            for index in range(args.batch_size):
+                ax[index,0].imshow(denormalize(x_real[index]).permute(1,2,0).cpu().numpy())
+                ax[index,0].set_title("x_real")
+                ax[index,1].imshow(denormalize(x_mask[index]).permute(1,2,0).cpu().numpy())
+                ax[index,1].set_title("mask")
+                ax[index,2].imshow(denormalize(x_ref[index]).permute(1,2,0).cpu())
+                ax[index,2].set_title("x_ref")          
+                ax[index,3].imshow(denormalize(x_fake[index]).permute(1,2,0).cpu())
+                ax[index,3].set_title("x_fake")
+                ax[index,4].imshow(denormalize(x_ref2[index]).permute(1,2,0).cpu())
+                ax[index,4].set_title("x_ref2")
+                ax[index,5].imshow(denormalize(x_fake2[index]).permute(1,2,0).cpu())
+                ax[index,5].set_title("x_fake2")
+                ax[index,6].imshow(denormalize(x_rec[index]).permute(1,2,0).cpu())
+                ax[index,6].set_title("x_rec")
+            remove_axes(ax)
+            fig.savefig('Mask visualization.png')
 
-    # visualization for debugging    
-    # with torch.no_grad():
-    #   fig, ax = plt.subplots(args.batch_size,6, figsize=(5*3,10))
-    #   for index in range(args.batch_size):
-    #     ax[index,0].imshow(denormalize(x_real[index]).squeeze().permute(1,2,0).cpu().numpy())
-    #     ax[index,0].set_title("x_real")
-    #     ax[index,1].imshow(attentions[index].cpu().numpy())
-    #     ax[index,1].set_title("mask")
-    #     ax[index,2].imshow(denormalize(x_fake[index]).permute(1,2,0).cpu())
-    #     ax[index,2].set_title("x_fake")          
-    #     ax[index,3].imshow(denormalize(x_fake2[index]).permute(1,2,0).cpu())
-    #     ax[index,3].set_title("x_fake2")
-    #     ax[index,4].imshow(denormalize(x_rec[index]).permute(1,2,0).cpu())
-    #     ax[index,4].set_title("x_rec")
-    #     ax[index,5].imshow(denormalize(backgrounds[index]).permute(1,2,0).cpu())
-    #     ax[index,5].set_title("background")
-    #   remove_axes(ax)
-    #   fig.savefig('A-B.png')
 
     loss = loss_adv + args.lambda_sty * loss_sty \
         - args.lambda_ds * loss_ds + args.lambda_cyc * loss_cyc

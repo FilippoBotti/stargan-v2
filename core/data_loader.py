@@ -107,7 +107,6 @@ class CustomReferenceDataset(data.Dataset):
         return list(zip(fnames, fnames2)), list(zip(masks,masks2)), labels
 
     def __getitem__(self, index):
-        print(len(self.samples))
         fname, fname2 = self.samples[index]
         mask, mask2 = self.masks[index]
         label = self.targets[index]
@@ -263,7 +262,7 @@ def get_eval_loader(root, img_size=256, batch_size=32,
                            drop_last=drop_last)
 
 
-def get_test_loader(root, mask_dir, img_size=256, batch_size=32,
+def get_test_loader(args, root, mask_dir, img_size=256, batch_size=32,
                     shuffle=True, num_workers=4):
     print('Preparing DataLoader for the generation phase...')
     transform = transforms.Compose([
