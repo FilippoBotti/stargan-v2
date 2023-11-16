@@ -112,8 +112,8 @@ class CustomReferenceDataset(data.Dataset):
         label = self.targets[index]
         img = Image.open(fname).convert('RGB')
         img2 = Image.open(fname2).convert('RGB')
-        mask = Image.open(mask).convert('RGB')
-        mask2 = Image.open(mask2).convert('RGB')
+        mask = Image.open(mask)
+        mask2 = Image.open(mask2)
         img,mask = random_transform(img,mask)
         img2,mask2 = random_transform(img2,mask2)
         return img, img2, mask, mask2, label
@@ -122,9 +122,10 @@ class CustomReferenceDataset(data.Dataset):
         return len(self.targets)
     
 class CustomDataset(data.Dataset):
-    def __init__(self, root, mask_dir, img_size, transform=None, test=False):
+    def __init__(self, root, mask_dir, img_size, transform_img=None, transform_mask=None, test=False):
         self.samples, self.masks, self.targets = self._make_dataset(root, mask_dir)
-        self.transform = transform
+        self.transform_img = transform_img
+        self.transform_mask = transform_mask
         self.test = test
         self.img_size = img_size
 
@@ -151,12 +152,12 @@ class CustomDataset(data.Dataset):
         label = self.targets[index]
         mask_fname = self.masks[index]
         img = Image.open(fname).convert('RGB')
-        mask = Image.open(mask_fname).convert('RGB')
+        mask = Image.open(mask_fname)
         if not self.test:
             img, mask = random_transform(img,mask,self.img_size)
-        if self.test and self.transform != None:
-            img = self.transform(img)
-            mask = self.transform(mask)
+        if self.test and (self.transform_img,self.transform_mask) != (None,None):
+            img = self.transform_img(img)
+            mask = self.transform_mask(mask)
         return img, mask, label
 
     def __len__(self):
@@ -265,14 +266,18 @@ def get_eval_loader(root, img_size=256, batch_size=32,
 def get_test_loader(args, root, mask_dir, img_size=256, batch_size=32,
                     shuffle=True, num_workers=4):
     print('Preparing DataLoader for the generation phase...')
-    transform = transforms.Compose([
+    transform_img = transforms.Compose([
         transforms.Resize([img_size, img_size]),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.5, 0.5, 0.5],
                              std=[0.5, 0.5, 0.5]),
     ])
+    transform_mask = transforms.Compose([
+        transforms.Resize([img_size, img_size]),
+        transforms.ToTensor(),
+    ])
 
-    dataset = CustomDataset(root, mask_dir, img_size, transform, test=True)
+    dataset = CustomDataset(root, mask_dir, img_size, transform_img, transform_mask, test=True)
     return data.DataLoader(dataset=dataset,
                            batch_size=batch_size,
                            shuffle=shuffle,
