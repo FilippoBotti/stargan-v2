@@ -300,20 +300,13 @@ class InputFetcher:
         return x, mask, y
 
     def _fetch_refs(self):
-        if self.args.mask_reference:
-            try:
-                x, x2, x_mask, x_mask2, y = next(self.iter_ref)
-            except (AttributeError, StopIteration):
-                self.iter_ref = iter(self.loader_ref)
-                x, x2, x_mask, x_mask2, y = next(self.iter_ref)
-            return x, x2, x_mask, x_mask2, y 
-        else:
-            try:
-                x, x2, y = next(self.iter_ref)
-            except (AttributeError, StopIteration):
-                self.iter_ref = iter(self.loader_ref)
-                x, x2, y = next(self.iter_ref)
-            return x, x2, y
+        try:
+            x, x2, x_mask, x_mask2, y = next(self.iter_ref)
+        except (AttributeError, StopIteration):
+            self.iter_ref = iter(self.loader_ref)
+            x, x2, x_mask, x_mask2, y = next(self.iter_ref)
+        return x, x2, x_mask, x_mask2, y 
+       
 
     def __next__(self):
         x, mask, y = self._fetch_inputs()
@@ -325,14 +318,9 @@ class InputFetcher:
             z_trg = torch.randn(x.size(0), self.latent_dim)
             z_trg2 = torch.randn(x.size(0), self.latent_dim)
 
-            if self.args.mask_reference:
-                inputs = Munch(x_src=x, x_mask=mask, y_src=y, y_ref=y_ref,
-                           x_ref=x_ref, x_ref_mask=x_ref_mask, x_ref2=x_ref2,
-                           x_ref2_mask=x_ref2_mask,z_trg=z_trg, z_trg2=z_trg2)
-            else :
-                inputs = Munch(x_src=x, x_mask=mask, y_src=y, y_ref=y_ref,
-                           x_ref=x_ref, x_ref2=x_ref2,
-                           z_trg=z_trg, z_trg2=z_trg2)
+            inputs = Munch(x_src=x, x_mask=mask, y_src=y, y_ref=y_ref,
+                        x_ref=x_ref, x_ref_mask=x_ref_mask, x_ref2=x_ref2,
+                        x_ref2_mask=x_ref2_mask,z_trg=z_trg, z_trg2=z_trg2)
                 
         elif self.mode == 'val':
             x_ref, mask, y_ref = self._fetch_inputs()

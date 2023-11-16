@@ -86,7 +86,6 @@ class Solver(nn.Module):
             optim.zero_grad()
 
 
-
     def train(self, loaders):
         args = self.args
         nets = self.nets
@@ -108,7 +107,7 @@ class Solver(nn.Module):
         print('Start training...')
         start_time = time.time()
         for i in range(args.resume_iter, args.total_iters):
-            
+
             # fetch images and labels
             inputs = next(fetcher)
             x_real, y_org, x_mask = inputs.x_src, inputs.y_src, inputs.x_mask
