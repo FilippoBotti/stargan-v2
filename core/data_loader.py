@@ -218,10 +218,7 @@ def get_train_loader(args, root, mask_dir, which='source', img_size=256,
     if which == 'source':
         dataset = CustomDataset(root, mask_dir, img_size, transform)
     elif which == 'reference':
-        if args.mask_reference:
-            dataset = CustomReferenceDataset(root, mask_dir, img_size, transform)
-        else:
-            dataset = ReferenceDataset(root,transform)
+        dataset = CustomReferenceDataset(root, mask_dir, img_size, transform)
     else:
         raise NotImplementedError
 
