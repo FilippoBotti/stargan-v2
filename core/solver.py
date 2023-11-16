@@ -242,7 +242,10 @@ def compute_d_loss(nets, args, x_real, y_org, y_trg, x_mask, background, z_trg=N
         if z_trg is not None:
             s_trg = nets.mapping_network(z_trg, y_trg)
         else:  # x_ref is not None
-            s_trg = nets.style_encoder(x_ref, y_trg)
+            if args.use_sean_encoder:
+                s_trg = nets.style_encoder(x_ref, y_trg)
+            else:
+                s_trg = nets.style_encoder(x_ref, y_trg)
         
         x_fake = nets.generator(x_real, s_trg, masks=masks)
         
@@ -270,7 +273,10 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, x_mask, background, z_trgs=
     if z_trgs is not None:
         s_trg = nets.mapping_network(z_trg, y_trg)
     else:
-        s_trg = nets.style_encoder(x_ref, y_trg)
+        if args.use_sean_encoder:
+            s_trg = nets.style_encoder(x_ref, y_trg)
+        else:
+            s_trg = nets.style_encoder(x_ref, y_trg)
 
     # generate fake image
     x_fake = nets.generator(x_real, s_trg, masks=masks)
@@ -292,7 +298,11 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, x_mask, background, z_trgs=
     if z_trgs is not None:
         s_trg2 = nets.mapping_network(z_trg2, y_trg)
     else:
-        s_trg2 = nets.style_encoder(x_ref2, y_trg)
+        if args.use_sean_encoder:
+            s_trg2 = nets.style_encoder(x_ref2, y_trg)
+        else:
+            s_trg2 = nets.style_encoder(x_ref2, y_trg)
+        
     x_fake2 = nets.generator(x_real, s_trg2, masks=masks)
 
     if args.background_separation:

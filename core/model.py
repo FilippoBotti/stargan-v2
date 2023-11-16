@@ -252,7 +252,41 @@ class StyleEncoder(nn.Module):
         s = out[idx, y]  # (batch, style_dim)
         return s
 
+class StyleEncoderSEAN(nn.Module):
+    def __init__(self, img_size=256, style_dim=64, num_domains=2, max_conv_dim=512):
+        super().__init__()
+        dim_in = 2**14 // img_size
+        blocks = []
+        blocks += [nn.Conv2d(3, dim_in, 3, 1, 1)]
 
+        repeat_num = int(np.log2(img_size)) - 2
+        for _ in range(repeat_num):
+            dim_out = min(dim_in*2, max_conv_dim)
+            blocks += [ResBlk(dim_in, dim_out, downsample=True)]
+            dim_in = dim_out
+
+        blocks += [nn.LeakyReLU(0.2)]
+        blocks += [nn.Conv2d(dim_out, dim_out, 4, 1, 0)]
+        blocks += [nn.LeakyReLU(0.2)]
+        self.shared = nn.Sequential(*blocks)
+
+        self.unshared = nn.ModuleList()
+        for _ in range(num_domains):
+            self.unshared += [nn.Linear(dim_out, style_dim)]
+
+    def forward(self, x, y, mask):
+        h = self.shared(x)
+        print(h.size())
+        h = h.view(h.size(0), -1)
+        print(h.size())
+        out = []
+        for layer in self.unshared:
+            out += [layer(h)]
+        out = torch.stack(out, dim=1)  # (batch, num_domains, style_dim)
+        idx = torch.LongTensor(range(y.size(0))).to(y.device)
+        s = out[idx, y]  # (batch, style_dim)
+        return s
+    
 class Discriminator(nn.Module):
     def __init__(self, img_size=256, num_domains=2, max_conv_dim=512):
         super().__init__()
@@ -283,7 +317,10 @@ class Discriminator(nn.Module):
 def build_model(args):
     generator = nn.DataParallel(Generator(args.img_size, args.style_dim, w_hpf=args.w_hpf))
     mapping_network = nn.DataParallel(MappingNetwork(args.latent_dim, args.style_dim, args.num_domains))
-    style_encoder = nn.DataParallel(StyleEncoder(args.img_size, args.style_dim, args.num_domains))
+    if args.use_sean_encoder:   
+        style_encoder = nn.DataParallel(StyleEncoderSEAN(args.img_size, args.style_dim, args.num_domains))
+    else:
+        style_encoder = nn.DataParallel(StyleEncoder(args.img_size, args.style_dim, args.num_domains))
     discriminator = nn.DataParallel(Discriminator(args.img_size, args.num_domains))
     generator_ema = copy.deepcopy(generator)
     mapping_network_ema = copy.deepcopy(mapping_network)
