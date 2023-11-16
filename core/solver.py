@@ -68,7 +68,7 @@ class Solver(nn.Module):
                 print('Initializing %s...' % name)
                 network.apply(utils.he_init)
 
-        if args.background_separation:
+        if args.background_separation and args.stego_path != '':
             print("Use stego to perform background separation")
             self.stego_model = LitUnsupervisedSegmenter.load_from_checkpoint(args.stego_path).cuda()
         
@@ -233,6 +233,7 @@ def compute_d_loss(nets, args, x_real, y_org, y_trg, x_mask, background, z_trg=N
     assert (z_trg is None) != (x_ref is None)
     # with real images
     x_real.requires_grad_()
+    print(x_real.size(), y_org.size())
     out = nets.discriminator(x_real, y_org)
     loss_real = adv_loss(out, 1)
     loss_reg = r1_reg(out, x_real)
@@ -372,3 +373,6 @@ def r1_reg(d_out, x_in):
     assert(grad_dout2.size() == x_in.size())
     reg = 0.5 * grad_dout2.view(batch_size, -1).sum(1).mean(0)
     return reg
+
+
+
