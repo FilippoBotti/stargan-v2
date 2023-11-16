@@ -340,7 +340,7 @@ def compute_g_loss(nets, args, x_real, y_org, y_trg, x_mask, background, z_trgs=
             for index in range(args.batch_size):
                 ax[index,0].imshow(denormalize(x_real[index]).permute(1,2,0).cpu().numpy())
                 ax[index,0].set_title("x_real")
-                ax[index,1].imshow(denormalize(x_mask[index]).permute(1,2,0).cpu().numpy())
+                ax[index,1].imshow(x_mask[index].permute(1,2,0).cpu().numpy())
                 ax[index,1].set_title("mask")
                 ax[index,2].imshow(denormalize(x_ref[index]).permute(1,2,0).cpu())
                 ax[index,2].set_title("x_ref")          

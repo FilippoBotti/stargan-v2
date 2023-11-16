@@ -311,10 +311,8 @@ class InputFetcher:
     def __next__(self):
         x, mask, y = self._fetch_inputs()
         if self.mode == 'train':
-            if self.args.mask_reference:
-                x_ref, x_ref2, x_ref_mask, x_ref2_mask, y_ref = self._fetch_refs()
-            else:
-                x_ref, x_ref2, y_ref = self._fetch_refs()
+            x_ref, x_ref2, x_ref_mask, x_ref2_mask, y_ref = self._fetch_refs()
+
             z_trg = torch.randn(x.size(0), self.latent_dim)
             z_trg2 = torch.randn(x.size(0), self.latent_dim)
 
