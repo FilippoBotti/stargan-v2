@@ -276,9 +276,15 @@ class StyleEncoderSEAN(nn.Module):
 
     def forward(self, x, y, mask):
         h = self.shared(x)
-        print(h.size())
+        # permute channel in order to perform interpolation correctly
+        h = h.permute(0,2,3,1)
+
+        mask = F.interpolate(mask, size=h.size()[2:], mode='nearest')
+        mask = mask.view(mask.size(0),-1)
         h = h.view(h.size(0), -1)
-        print(h.size())
+        
+        # perfom mask multiplication
+        h = h * mask
         out = []
         for layer in self.unshared:
             out += [layer(h)]
