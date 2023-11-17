@@ -333,13 +333,13 @@ def build_model(args):
     style_encoder_ema = copy.deepcopy(style_encoder)
 
     if args.use_torch_compile:
-        generator = torch.compile(generator)
-        generator_ema = torch.compile(generator_ema)
-        mapping_network = torch.compile(mapping_network)
-        mapping_network_ema = torch.compile(mapping_network_ema)
-        discriminator2 = torch.compile(discriminator)
-        style_encoder = torch.compile(style_encoder)
-        style_encoder_ema = torch.compile(style_encoder_ema)
+        generator = torch.compile(generator, automatic_dynamic_shapes=False)
+        generator_ema = torch.compile(generator_ema, automatic_dynamic_shapes=False)
+        mapping_network = torch.compile(mapping_network, automatic_dynamic_shapes=False)
+        mapping_network_ema = torch.compile(mapping_network_ema, automatic_dynamic_shapes=False)
+        discriminator2 = torch.compile(discriminator, automatic_dynamic_shapes=False)
+        style_encoder = torch.compile(style_encoder, automatic_dynamic_shapes=False)
+        style_encoder_ema = torch.compile(style_encoder_ema, automatic_dynamic_shapes=False)
 
     nets = Munch(generator=generator,
                  mapping_network=mapping_network,
