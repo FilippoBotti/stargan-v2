@@ -332,13 +332,22 @@ def build_model(args):
     mapping_network_ema = copy.deepcopy(mapping_network)
     style_encoder_ema = copy.deepcopy(style_encoder)
 
-    nets = Munch(generator=generator,
-                 mapping_network=mapping_network,
-                 style_encoder=style_encoder,
+    if args.use_torch_compile:
+        generator = torch.compile(generator)
+        generator_ema = torch.compile(generator_ema)
+        mapping_network = torch.compile(mapping_network)
+        mapping_network_ema = torch.compile(mapping_network_ema)
+        discriminator2 = torch.compile(discriminator)
+        style_encoder = torch.compile(style_encoder)
+        style_encoder_ema = torch.compile(style_encoder_ema)
+
+    nets = Munch(generator=generator2,
+                 mapping_network=mapping_network2,
+                 style_encoder=style_encoder2,
                  discriminator=discriminator)
-    nets_ema = Munch(generator=generator_ema,
-                     mapping_network=mapping_network_ema,
-                     style_encoder=style_encoder_ema)
+    nets_ema = Munch(generator=generator_ema2,
+                     mapping_network=mapping_network_ema2,
+                     style_encoder=style_encoder_ema2)
 
     if args.w_hpf > 0:
         fan = nn.DataParallel(FAN(fname_pretrained=args.wing_path).eval())
