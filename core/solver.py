@@ -112,6 +112,7 @@ class Solver(nn.Module):
             inputs = next(fetcher)
             x_real, y_org, x_mask = inputs.x_src, inputs.y_src, inputs.x_mask
             
+            background=None
             # attention
             if args.background_separation:
                 background = x_real *(1-x_mask)
