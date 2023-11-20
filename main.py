@@ -75,7 +75,7 @@ def main(args):
                                             num_workers=args.num_workers),
                         ref=get_test_loader(args=args,
                                             root=args.ref_dir,
-                                            mask_dir = args.val_mask_dir,
+                                            mask_dir = args.train_mask_dir,
                                             img_size=args.img_size,
                                             batch_size=args.val_batch_size,
                                             shuffle=False,

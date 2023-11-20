@@ -205,8 +205,8 @@ class Solver(nn.Module):
         os.makedirs(args.result_dir, exist_ok=True)
         self._load_checkpoint(args.resume_iter)
 
-        src = next(InputFetcher(loaders.src, None, args.latent_dim, 'test'))
-        ref = next(InputFetcher(loaders.ref, None, args.latent_dim, 'test'))
+        src = next(InputFetcher(args,loaders.src, None, args.latent_dim, 'test'))
+        ref = next(InputFetcher(args,loaders.ref, None, args.latent_dim, 'test'))
 
         fname = ospj(args.result_dir, 'reference.jpg')
         print('Working on {}...'.format(fname))
