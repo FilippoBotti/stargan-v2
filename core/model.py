@@ -10,7 +10,7 @@ Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.
 
 import copy
 import math
-
+import torchvision
 from munch import Munch
 import numpy as np
 import torch
@@ -243,7 +243,9 @@ class StyleEncoder(nn.Module):
 
     def forward(self, x, y):
         h = self.shared(x)
+        print(h.size())
         h = h.view(h.size(0), -1)
+        print("h",h.shape)
         out = []
         for layer in self.unshared:
             out += [layer(h)]
@@ -259,14 +261,14 @@ class StyleEncoderSEAN(nn.Module):
         blocks = []
         blocks += [nn.Conv2d(3, dim_in, 3, 1, 1)]
 
-        repeat_num = int(np.log2(img_size)) - 2
+        repeat_num = 2
         for _ in range(repeat_num):
             dim_out = min(dim_in*2, max_conv_dim)
             blocks += [ResBlk(dim_in, dim_out, downsample=True)]
             dim_in = dim_out
 
         blocks += [nn.LeakyReLU(0.2)]
-        blocks += [nn.Conv2d(dim_out, dim_out, 4, 1, 0)]
+        blocks += [nn.Conv2d(dim_out, dim_out, 3, 1, 1)]
         blocks += [nn.LeakyReLU(0.2)]
         self.shared = nn.Sequential(*blocks)
 
@@ -276,15 +278,28 @@ class StyleEncoderSEAN(nn.Module):
 
     def forward(self, x, y, mask):
         h = self.shared(x)
-        # permute channel in order to perform interpolation correctly
-        h = h.permute(0,2,3,1)
 
-        mask = F.interpolate(mask, size=h.size()[2:], mode='nearest')
-        mask = mask.view(mask.size(0),-1)
-        h = h.view(h.size(0), -1)
-        
-        # perfom mask multiplication
-        h = h * mask
+        resize = torchvision.transforms.Resize((64,64))
+        mask = resize(mask)
+         
+        # SEAN encoder
+        b_size = h.shape[0]
+        s_size = mask.shape[1]
+        f_size = h.shape[1]
+        codes_vector = torch.zeros((b_size, s_size, f_size), dtype=h.dtype, device=h.device)
+
+
+        for i in range(b_size):
+            for j in range(s_size):
+                component_mask_area = torch.sum(mask.bool()[i, j])
+                if component_mask_area > 0:
+                    codes_component_feature = h[i].masked_select(mask.bool()[i, j]).reshape(f_size,  component_mask_area).mean(1)
+                    codes_vector[i][j] = codes_component_feature
+
+                    # codes_avg[i].masked_scatter_(segmap.bool()[i, j], codes_component_mu)
+        h = codes_vector.squeeze(0)
+
+        # stargan-v2 encoder linear
         out = []
         for layer in self.unshared:
             out += [layer(h)]
@@ -356,3 +371,5 @@ def build_model(args):
         nets_ema.fan = fan
 
     return nets, nets_ema
+
+
