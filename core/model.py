@@ -243,9 +243,7 @@ class StyleEncoder(nn.Module):
 
     def forward(self, x, y):
         h = self.shared(x)
-        print(h.size())
         h = h.view(h.size(0), -1)
-        print("h",h.shape)
         out = []
         for layer in self.unshared:
             out += [layer(h)]
