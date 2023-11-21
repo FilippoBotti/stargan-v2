@@ -296,7 +296,7 @@ class StyleEncoderSEAN(nn.Module):
 
                     # codes_avg[i].masked_scatter_(segmap.bool()[i, j], codes_component_mu)
         h = codes_vector.squeeze(0)
-
+        h = h.view(h.size(0), -1)       
         # stargan-v2 encoder linear
         out = []
         for layer in self.unshared:
