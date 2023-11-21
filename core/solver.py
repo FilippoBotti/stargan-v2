@@ -32,7 +32,7 @@ class Solver(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device(f'cuda:{args.gpu_id}' if torch.cuda.is_available() else 'cpu')
 
         self.nets, self.nets_ema = build_model(args)
         #print(self.stego_model)
