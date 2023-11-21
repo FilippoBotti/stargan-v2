@@ -334,13 +334,13 @@ class Discriminator(nn.Module):
 
 
 def build_model(args):
-    generator = nn.DataParallel(Generator(args.img_size, args.style_dim, w_hpf=args.w_hpf), device_ids=args.gpu_id)
-    mapping_network = nn.DataParallel(MappingNetwork(args.latent_dim, args.style_dim, args.num_domains), device_ids=args.gpu_id)
+    generator = nn.DataParallel(Generator(args.img_size, args.style_dim, w_hpf=args.w_hpf), device_ids=[args.gpu_id])
+    mapping_network = nn.DataParallel(MappingNetwork(args.latent_dim, args.style_dim, args.num_domains), device_ids=[args.gpu_id])
     if args.use_sean_encoder:   
-        style_encoder = nn.DataParallel(StyleEncoderSEAN(args.img_size, args.style_dim, args.num_domains), device_ids=args.gpu_id)
+        style_encoder = nn.DataParallel(StyleEncoderSEAN(args.img_size, args.style_dim, args.num_domains), device_ids=[args.gpu_id])
     else:
-        style_encoder = nn.DataParallel(StyleEncoder(args.img_size, args.style_dim, args.num_domains), device_ids=args.gpu_id)
-    discriminator = nn.DataParallel(Discriminator(args.img_size, args.num_domains), device_ids=args.gpu_id)
+        style_encoder = nn.DataParallel(StyleEncoder(args.img_size, args.style_dim, args.num_domains), device_ids=[args.gpu_id])
+    discriminator = nn.DataParallel(Discriminator(args.img_size, args.num_domains), device_ids=[args.gpu_id])
     generator_ema = copy.deepcopy(generator)
     mapping_network_ema = copy.deepcopy(mapping_network)
     style_encoder_ema = copy.deepcopy(style_encoder)
