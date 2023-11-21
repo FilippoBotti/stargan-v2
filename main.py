@@ -101,7 +101,7 @@ if __name__ == '__main__':
     parser.add_argument('--visualize_mask', action='store_true', help='Visualize mask')
     parser.add_argument('--use_sean_encoder', action='store_true', help='Use sean encoder')
     parser.add_argument('--use_torch_compile', action='store_true', help='Use torch compile to speed up on A100')
-    parser.add_argument('--gpu_id', type=int, default=0,
+    parser.add_argument('--gpu_id', type=str, default=0,
                         help='GPU id')
     # model arguments
     parser.add_argument('--img_size', type=int, default=256,
