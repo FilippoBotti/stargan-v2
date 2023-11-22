@@ -101,35 +101,43 @@ def translate_using_latent(nets, args, x_src, y_trg_list, z_trg_list, psi, filen
 
 
 @torch.no_grad()
-def translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, x_ref_mask=None, stego_model=None):
-    if args.background_separation and stego_model != None:
-        for index in range(x_ref.shape[0]):
-            with torch.no_grad():
-                code_A = stego_model(x_ref)
-                linear_probs_A = torch.log_softmax(stego_model.linear_probe(code_A), dim=1).cpu()
-                single_img_A = x_ref[index].cpu()
-                linear_pred_A = dense_crf(single_img_A, linear_probs_A[index]).argmax(0)
-                mask_A = (linear_pred_A == 7)*1
-                #ho la maschera, la converto in pytorch e genero quindi l'attenzione
-                attention = torch.tensor(mask_A).cuda()
-                if args.mask_reference:
-                    x_ref[index] = x_ref[index]*attention
+def translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, x_ref_mask=None, x_src_mask=None, stego_model=None):
 
-        attentions = []
-        backgrounds = []
-        for index in range(x_src.shape[0]):
-            with torch.no_grad():
-                code_A = stego_model(x_src)
-                linear_probs_A = torch.log_softmax(stego_model.linear_probe(code_A), dim=1).cpu()
-                single_img_A = x_src[index].cpu()
-                linear_pred_A = dense_crf(single_img_A, linear_probs_A[index]).argmax(0)
-                mask_A = (linear_pred_A == 7)*1
-                #ho la maschera, la converto in pytorch e genero quindi l'attenzione
-                attention = torch.tensor(mask_A).cuda()
-                attentions.append(attention)
-                backgrounds.append(x_src[index]*(1-attention))
-                if args.mask_input:
-                    x_src[index] = x_src[index]*attention
+    if stego_model != None:
+        if args.background_separation:
+            for index in range(x_ref.shape[0]):
+                with torch.no_grad():
+                    code_A = stego_model(x_ref)
+                    linear_probs_A = torch.log_softmax(stego_model.linear_probe(code_A), dim=1).cpu()
+                    single_img_A = x_ref[index].cpu()
+                    linear_pred_A = dense_crf(single_img_A, linear_probs_A[index]).argmax(0)
+                    mask_A = (linear_pred_A == 7)*1
+                    #ho la maschera, la converto in pytorch e genero quindi l'attenzione
+                    attention = torch.tensor(mask_A).cuda()
+                    if args.mask_reference:
+                        x_ref[index] = x_ref[index]*attention
+
+            attentions = []
+            backgrounds = []
+            for index in range(x_src.shape[0]):
+                with torch.no_grad():
+                    code_A = stego_model(x_src)
+                    linear_probs_A = torch.log_softmax(stego_model.linear_probe(code_A), dim=1).cpu()
+                    single_img_A = x_src[index].cpu()
+                    linear_pred_A = dense_crf(single_img_A, linear_probs_A[index]).argmax(0)
+                    mask_A = (linear_pred_A == 7)*1
+                    #ho la maschera, la converto in pytorch e genero quindi l'attenzione
+                    attention = torch.tensor(mask_A).cuda()
+                    attentions.append(attention)
+                    backgrounds.append(x_src[index]*(1-attention))
+                    if args.mask_input:
+                        x_src[index] = x_src[index]*attention
+    else:
+        if args.backroung_separation:
+            if args.mask_reference:
+                x_ref = x_ref * x_ref_mask 
+            if args.mask_input:
+                x_src = x_src * x_src_mask
 
     N, C, H, W = x_src.size()
     wb = torch.ones(1, C, H, W).to(x_src.device)
@@ -145,9 +153,12 @@ def translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, x_ref_m
     
     for i, s_ref in enumerate(s_ref_list):
         x_fake = nets.generator(x_src, s_ref, masks=masks)
-        if stego_model != None:
-            for index in range(x_fake.shape[0]):
-                x_fake[index] = x_fake[index]*attentions[index] + backgrounds[index]
+        if args.background_separation:
+            if stego_model != None:
+                for index in range(x_fake.shape[0]):
+                    x_fake[index] = x_fake[index]*attentions[index] + backgrounds[index]
+            else:
+                x_fake = x_fake * x_src_mask + x_src*(1-x_src_mask)
 
         x_fake_with_ref = torch.cat([x_ref[i:i+1], x_fake], dim=0)
         x_concat += [x_fake_with_ref]

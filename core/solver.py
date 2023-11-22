@@ -209,16 +209,16 @@ class Solver(nn.Module):
         ref = next(InputFetcher(args,loaders.ref, None, args.latent_dim, 'test'))
 
         filename = args.name + '_reference.jpg'
-        fname = ospj(args.result_dir, 'reference.jpg')
+        fname = ospj(args.result_dir, filename)
         print('Working on {}...'.format(fname))
         if args.use_sean_encoder:
             if args.background_separation:
-                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, ref.mask, self.stego_model)
+                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, x_ref_mask=ref.mask, x_src_mask=src.mask, stego_model=self.stego_model)
             else:
-                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, ref.mask, fname)
+                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, x_ref_mask=ref.mask,)
         else:
             if args.background_separation:
-                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, self.stego_model)
+                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, x_src_mask=src.mask, stego_model=self.stego_model)
             else:
                 utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname)
 
