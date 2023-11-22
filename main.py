@@ -63,6 +63,21 @@ def main(args):
                                             shuffle=True,
                                             num_workers=args.num_workers))
         solver.train(loaders)
+        loaders_sample = Munch(src=get_test_loader(args=args,
+                                            root=args.src_dir,
+                                            mask_dir = args.src_mask_dir,
+                                            img_size=args.img_size,
+                                            batch_size=args.val_batch_size,
+                                            shuffle=False,
+                                            num_workers=args.num_workers),
+                        ref=get_test_loader(args=args,
+                                            root=args.ref_dir,
+                                            mask_dir = args.ref_mask_dir,
+                                            img_size=args.img_size,
+                                            batch_size=args.val_batch_size,
+                                            shuffle=False,
+                                            num_workers=args.num_workers))
+        solver.sample(loaders_sample)
     elif args.mode == 'sample':
         assert len(subdirs(args.src_dir)) == args.num_domains
         assert len(subdirs(args.ref_dir)) == args.num_domains
@@ -103,6 +118,9 @@ if __name__ == '__main__':
     parser.add_argument('--use_torch_compile', action='store_true', help='Use torch compile to speed up on A100')
     parser.add_argument('--gpu_id', type=int, default=0,
                         help='GPU id')
+    parser.add_argument('--name', type=str, default='stargan',
+                        help='Project name')
+    
     # model arguments
     parser.add_argument('--img_size', type=int, default=256,
                         help='Image resolution')
