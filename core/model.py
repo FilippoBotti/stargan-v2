@@ -277,7 +277,7 @@ class StyleEncoderSEAN(nn.Module):
     def forward(self, x, y, mask):
         h = self.shared(x)
 
-        resize = torchvision.transforms.Resize((64,64))
+        resize = torchvision.transforms.Resize((64,64),antialias=True)
         mask = resize(mask)
          
         # SEAN encoder

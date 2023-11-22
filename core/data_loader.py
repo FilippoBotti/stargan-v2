@@ -174,8 +174,8 @@ def random_transform(A,A_mask, img_size=256, prob=0.5):
     
 
     # resize
-    A = TF.resize(A, [img_size,img_size])
-    A_mask = TF.resize(A_mask, [img_size,img_size])
+    A = TF.resize(A, [img_size,img_size], antialias=True)
+    A_mask = TF.resize(A_mask, [img_size,img_size],antialias=True)
 
     # Random horizontal flipping
     if random.random() > 0.5:
@@ -208,7 +208,7 @@ def get_train_loader(args, root, mask_dir, which='source', img_size=256,
         lambda x: crop(x) if random.random() < prob else x)
 
     transform = transforms.Compose([
-        transforms.Resize([img_size, img_size]),
+        transforms.Resize([img_size, img_size],antialias=True),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.5, 0.5, 0.5],
@@ -245,8 +245,8 @@ def get_eval_loader(root, img_size=256, batch_size=32,
         std = [0.5, 0.5, 0.5]
 
     transform = transforms.Compose([
-        transforms.Resize([img_size, img_size]),
-        transforms.Resize([height, width]),
+        transforms.Resize([img_size, img_size],antialias=True),
+        transforms.Resize([height, width],antialias=True),
         transforms.ToTensor(),
         transforms.Normalize(mean=mean, std=std)
     ])
@@ -264,13 +264,13 @@ def get_test_loader(args, root, mask_dir, img_size=256, batch_size=32,
                     shuffle=True, num_workers=4):
     print('Preparing DataLoader for the generation phase...')
     transform_img = transforms.Compose([
-        transforms.Resize([img_size, img_size]),
+        transforms.Resize([img_size, img_size],antialias=True),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.5, 0.5, 0.5],
                              std=[0.5, 0.5, 0.5]),
     ])
     transform_mask = transforms.Compose([
-        transforms.Resize([img_size, img_size]),
+        transforms.Resize([img_size, img_size],antialias=True),
         transforms.ToTensor(),
     ])
 
