@@ -210,14 +210,20 @@ class Solver(nn.Module):
 
         fname = ospj(args.result_dir, 'reference.jpg')
         print('Working on {}...'.format(fname))
-        if args.background_separation:
-            utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, self.stego_model)
+        if args.use_sean_encoder:
+            if args.background_separation:
+                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, ref.mask, fname, self.stego_model)
+            else:
+                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, ref.mask, fname)
         else:
-            utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname)
+            if args.background_separation:
+                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, self.stego_model)
+            else:
+                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname)
 
-        fname = ospj(args.result_dir, 'video_ref.mp4')
-        print('Working on {}...'.format(fname))
-        utils.video_ref(nets_ema, args, src.x, ref.x, ref.y, fname)
+        # fname = ospj(args.result_dir, 'video_ref.mp4')
+        # print('Working on {}...'.format(fname))
+        # utils.video_ref(nets_ema, args, src.x, ref.x, ref.y, fname)
 
     @torch.no_grad()
     def evaluate(self):

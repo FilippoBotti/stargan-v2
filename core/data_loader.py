@@ -325,7 +325,7 @@ class InputFetcher:
             inputs = Munch(x_src=x, x_mask=mask, y_src=y,
                            x_ref=x_ref, y_ref=y_ref)
         elif self.mode == 'test':
-            inputs = Munch(x=x, x_mask=mask, y=y)
+            inputs = Munch(x=x, mask=mask, y=y)
         else:
             raise NotImplementedError
 

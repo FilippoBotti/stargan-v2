@@ -101,11 +101,16 @@ def translate_using_latent(nets, args, x_src, y_trg_list, z_trg_list, psi, filen
 
 
 @torch.no_grad()
-def translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, stego_model=None):
+def translate_using_reference(nets, args, x_src, x_ref, y_ref, x_ref_mask, filename, stego_model=None):
     
-    if stego_model != None:
-        attentions = []
-        backgrounds = []
+    if args.use_sean_encoder:
+        s_ref = nets.style_encoder(x_ref, y_ref, x_ref_mask)
+    else:
+        s_ref = nets.style_encoder(x_ref, y_ref)
+
+    s_ref_list = s_ref.unsqueeze(1).repeat(1, N, 1)
+    
+    if args.background_separation and stego_model != None:
         for index in range(x_ref.shape[0]):
             with torch.no_grad():
                 code_A = stego_model(x_ref)
@@ -118,6 +123,8 @@ def translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, stego_m
                 if args.mask_reference:
                     x_ref[index] = x_ref[index]*attention
 
+        attentions = []
+        backgrounds = []
         for index in range(x_src.shape[0]):
             with torch.no_grad():
                 code_A = stego_model(x_src)
@@ -136,8 +143,7 @@ def translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, stego_m
     wb = torch.ones(1, C, H, W).to(x_src.device)
     x_src_with_wb = torch.cat([wb, x_src], dim=0)
     masks = nets.fan.get_heatmap(x_src) if args.w_hpf > 0 else None
-    s_ref = nets.style_encoder(x_ref, y_ref)
-    s_ref_list = s_ref.unsqueeze(1).repeat(1, N, 1)
+   
     x_concat = [x_src_with_wb]
 
     
