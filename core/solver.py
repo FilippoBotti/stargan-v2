@@ -212,7 +212,7 @@ class Solver(nn.Module):
         print('Working on {}...'.format(fname))
         if args.use_sean_encoder:
             if args.background_separation:
-                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, ref.mask, fname, self.stego_model)
+                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, ref.mask, self.stego_model)
             else:
                 utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, ref.mask, fname)
         else:

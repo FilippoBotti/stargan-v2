@@ -101,11 +101,7 @@ def translate_using_latent(nets, args, x_src, y_trg_list, z_trg_list, psi, filen
 
 
 @torch.no_grad()
-def translate_using_reference(nets, args, x_src, x_ref, y_ref, x_ref_mask, filename, stego_model=None):
-    
-    
-
-    
+def translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, x_ref_mask=None, stego_model=None):
     if args.background_separation and stego_model != None:
         for index in range(x_ref.shape[0]):
             with torch.no_grad():
