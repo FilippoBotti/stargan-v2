@@ -220,7 +220,7 @@ class Solver(nn.Module):
                 utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, x_ref_mask=ref.mask)
         else:
             if args.background_separation:
-                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, x_src_mask=src.mask, stego_model=self.stego_model)
+                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, x_ref_mask=ref.mask, x_src_mask=src.mask, stego_model=self.stego_model)
             else:
                 utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname)
 
