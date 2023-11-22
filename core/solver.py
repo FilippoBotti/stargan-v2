@@ -71,6 +71,8 @@ class Solver(nn.Module):
         if args.background_separation and args.stego_path != '':
             print("Use stego to perform background separation")
             self.stego_model = LitUnsupervisedSegmenter.load_from_checkpoint(args.stego_path).cuda()
+        else:
+            self.stego_model = None
         
 
     def _save_checkpoint(self, step):
@@ -215,7 +217,7 @@ class Solver(nn.Module):
             if args.background_separation:
                 utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, x_ref_mask=ref.mask, x_src_mask=src.mask, stego_model=self.stego_model)
             else:
-                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, x_ref_mask=ref.mask,)
+                utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, x_ref_mask=ref.mask)
         else:
             if args.background_separation:
                 utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, x_src_mask=src.mask, stego_model=self.stego_model)
