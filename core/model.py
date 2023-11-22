@@ -345,6 +345,8 @@ def build_model(args):
     mapping_network_ema = copy.deepcopy(mapping_network)
     style_encoder_ema = copy.deepcopy(style_encoder)
 
+    torch.set_float32_matmul_precision('high')
+    
     if args.use_torch_compile:
         generator = torch.compile(generator, dynamic=False)
         generator_ema = torch.compile(generator_ema, dynamic=False)
