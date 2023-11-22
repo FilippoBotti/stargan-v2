@@ -133,7 +133,7 @@ def translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, x_ref_m
                     if args.mask_input:
                         x_src[index] = x_src[index]*attention
     else:
-        if args.backroung_separation:
+        if args.background_separation:
             if args.mask_reference:
                 x_ref = x_ref * x_ref_mask 
             if args.mask_input:
