@@ -159,7 +159,7 @@ def translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, x_ref_m
                 for index in range(x_fake.shape[0]):
                     x_fake[index] = x_fake[index]*attentions[index] + backgrounds[index]
             else:
-                x_fake = x_fake * x_src_mask + x_src*background
+                x_fake = x_fake * x_src_mask + background
 
         x_fake_with_ref = torch.cat([x_ref[i:i+1], x_fake], dim=0)
         x_concat += [x_fake_with_ref]
