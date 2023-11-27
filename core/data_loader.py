@@ -165,42 +165,39 @@ class CustomDataset(data.Dataset):
     
 class CustomEvalDataset(data.Dataset):
     def __init__(self, root, mask_dir, img_size, transform_img=None, transform_mask=None):
-        self.samples, self.masks, self.targets = self._make_dataset(root, mask_dir)
+        self.samples, self.masks= self._make_dataset(root, mask_dir)
+        print(len(self.samples), len(self.masks))
         self.transform_img = transform_img
         self.transform_mask = transform_mask
         self.img_size = img_size
 
     def _make_dataset(self, root, root_mask_dir):
-      domains = os.listdir(root)
-      fnames, masks, labels = [], [], []
-      for idx, domain in enumerate(sorted(domains)):
-          class_dir = os.path.join(root, domain)
-          mask_dir = os.path.join(root_mask_dir, domain)
-          cls_fnames = listdir(class_dir)
-          mask_fnames = listdir(mask_dir)
-          # Ensure that cls_fnames and mask_fnames are sorted in the same order
-          cls_fnames.sort()
-          mask_fnames.sort()
+      fnames, masks = [], []
+      cls_fnames = listdir(root)
+      print(root_mask_dir)
+      mask_fnames = listdir(root_mask_dir)
 
-          fnames += cls_fnames
-          masks+= mask_fnames
-          labels += [idx] * len(cls_fnames)
-      return list(fnames), list(masks), labels
+      # Ensure that cls_fnames and mask_fnames are sorted in the same order
+      cls_fnames.sort()
+      mask_fnames.sort()
+
+      fnames += cls_fnames
+      masks+= mask_fnames
+      return list(fnames), list(masks)
 
 
     def __getitem__(self, index):
         fname = self.samples[index]
-        label = self.targets[index]
         mask_fname = self.masks[index]
         img = Image.open(fname).convert('RGB')
         mask = Image.open(mask_fname)
         if (self.transform_img,self.transform_mask) != (None,None):
             img = self.transform_img(img)
             mask = self.transform_mask(mask)
-        return img, mask, label
+        return img, mask
 
     def __len__(self):
-        return len(self.targets)
+        return len(self.samples)
 
 def random_transform(A,A_mask, img_size=256, prob=0.5):
     # Random resized crop
@@ -270,6 +267,35 @@ def get_train_loader(args, root, mask_dir, which='source', img_size=256,
                            drop_last=True)
 
 
+def get_eval_fid_loader(root, img_size=256, batch_size=32,
+                    imagenet_normalize=True, shuffle=True,
+                    num_workers=4, drop_last=False):
+    print('Preparing DataLoader for the evaluation phase...')
+    if imagenet_normalize:
+        height, width = 299, 299
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+    else:
+        height, width = img_size, img_size
+        mean = [0.5, 0.5, 0.5]
+        std = [0.5, 0.5, 0.5]
+
+    transform = transforms.Compose([
+        transforms.Resize([img_size, img_size],antialias=True),
+        transforms.Resize([height, width],antialias=True),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=mean, std=std)
+    ])
+    
+
+    dataset = DefaultDataset(root, transform=transform)
+    return data.DataLoader(dataset=dataset,
+                           batch_size=batch_size,
+                           shuffle=shuffle,
+                           num_workers=num_workers,
+                           pin_memory=True,
+                           drop_last=drop_last)
+
 def get_eval_loader(root, mask_dir, img_size=256, batch_size=32,
                     imagenet_normalize=True, shuffle=True,
                     num_workers=4, drop_last=False):
@@ -295,7 +321,7 @@ def get_eval_loader(root, mask_dir, img_size=256, batch_size=32,
         transforms.ToTensor(),
     ])
 
-    dataset = CustomEvalDataset(root, mask_dir, transform_img==transform_img, transform_mask=transform_mask)
+    dataset = CustomEvalDataset(root, mask_dir, img_size=img_size, transform_img=transform_img, transform_mask=transform_mask)
     return data.DataLoader(dataset=dataset,
                            batch_size=batch_size,
                            shuffle=shuffle,

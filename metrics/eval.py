@@ -64,6 +64,7 @@ def calculate_metrics(nets, args, step, mode):
             lpips_values = []
             print('Generating images and calculating LPIPS for %s...' % task)
             for i, x_src in enumerate(tqdm(loader_src, total=len(loader_src))):
+                x_src = x_src[0] # img, mask
                 N = x_src.size(0)
                 x_src = x_src.to(device)
                 y_trg = torch.tensor([trg_idx] * N).to(device)
@@ -77,13 +78,19 @@ def calculate_metrics(nets, args, step, mode):
                         s_trg = nets.mapping_network(z_trg, y_trg)
                     else:
                         try:
-                            x_ref = next(iter_ref).to(device)
+                            x_ref, x_ref_mask = next(iter_ref)
+                            x_ref = x_ref.to(device)
+                            x_ref_mask = x_ref_mask.to(device)
                         except:
                             iter_ref = iter(loader_ref)
-                            x_ref = next(iter_ref).to(device)
-
+                            x_ref, x_ref_mask = next(iter_ref)
+                            print(len(x_ref))
+                            x_ref = x_ref.to(device)
+                            x_ref_mask = x_ref_mask.to(device)
+                        print(x_ref.shape)
                         if x_ref.size(0) > N:
                             x_ref = x_ref[:N]
+                            x_ref_mask = x_ref_mask[:N]
                         if args.use_sean_encoder:
                             s_trg = nets.style_encoder(x_ref, y_trg, x_ref_mask)
                         else:
@@ -131,14 +138,15 @@ def calculate_fid_for_all_tasks(args, domains, step, mode):
     fid_values = OrderedDict()
     for trg_domain in domains:
         src_domains = [x for x in domains if x != trg_domain]
-
         for src_domain in src_domains:
             task = '%s2%s' % (src_domain, trg_domain)
             path_real = os.path.join(args.train_img_dir, trg_domain)
             path_fake = os.path.join(args.eval_dir, task)
+            path_real_mask = os.path.join(args.train_mask_dir, trg_domain)
             print('Calculating FID for %s...' % task)
             fid_value = calculate_fid_given_paths(
                 paths=[path_real, path_fake],
+                mask = path_real_mask,
                 img_size=args.img_size,
                 batch_size=args.val_batch_size)
             fid_values['FID_%s/%s' % (mode, task)] = fid_value

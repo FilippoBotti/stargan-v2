@@ -16,7 +16,7 @@ import torch.nn as nn
 import numpy as np
 from torchvision import models
 from scipy import linalg
-from core.data_loader import get_eval_loader
+from core.data_loader import get_eval_loader, get_eval_fid_loader
 
 try:
     from tqdm import tqdm
@@ -60,11 +60,11 @@ def frechet_distance(mu, cov, mu2, cov2):
 
 
 @torch.no_grad()
-def calculate_fid_given_paths(paths, img_size=256, batch_size=50):
+def calculate_fid_given_paths(paths, mask, img_size=256, batch_size=50):
     print('Calculating FID given paths %s and %s...' % (paths[0], paths[1]))
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     inception = InceptionV3().eval().to(device)
-    loaders = [get_eval_loader(path, img_size, batch_size) for path in paths]
+    loaders = [get_eval_fid_loader(path, img_size, batch_size) for path in paths]
 
     mu, cov = [], []
     for loader in loaders:
