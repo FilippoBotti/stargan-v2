@@ -19,7 +19,6 @@ import torch.nn.functional as F
 from attention import SpatialTransformer
 from core.wing import FAN
 
-test
 class ResBlk(nn.Module):
     def __init__(self, dim_in, dim_out, actv=nn.LeakyReLU(0.2),
                  normalize=False, downsample=False):
