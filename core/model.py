@@ -16,7 +16,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from stablediffusion.ldm.modules.attention import SpatialTransformer
+from attention import SpatialTransformer
 from core.wing import FAN
 
 
@@ -382,3 +382,4 @@ def build_model(args):
     return nets, nets_ema
 
 
+print("model")
