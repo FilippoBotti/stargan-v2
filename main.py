@@ -30,7 +30,7 @@ def subdirs(dname):
 
 
 def main(args):
-    print(args)
+    print(args, flush=True)
     cudnn.benchmark = True
     torch.manual_seed(args.seed)
 

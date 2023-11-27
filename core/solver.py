@@ -65,11 +65,11 @@ class Solver(nn.Module):
         for name, network in self.named_children():
             # Do not initialize the FAN parameters
             if ('ema' not in name) and ('fan' not in name):
-                print('Initializing %s...' % name)
+                print('Initializing %s...' % name, flush=True)
                 network.apply(utils.he_init)
 
         if args.background_separation and args.stego_path != '':
-            print("Use stego to perform background separation")
+            print("Use stego to perform background separation", flush=True)
             self.stego_model = LitUnsupervisedSegmenter.load_from_checkpoint(args.stego_path).cuda()
         else:
             self.stego_model = None
@@ -106,7 +106,7 @@ class Solver(nn.Module):
         # remember the initial value of ds weight
         initial_lambda_ds = args.lambda_ds
 
-        print('Start training...')
+        print('Start training...', flush=True)
         start_time = time.time()
         for i in range(args.resume_iter, args.total_iters):
 
@@ -188,7 +188,7 @@ class Solver(nn.Module):
                         all_losses[prefix + key] = value
                 all_losses['G/lambda_ds'] = args.lambda_ds
                 log += ' '.join(['%s: [%.4f]' % (key, value) for key, value in all_losses.items()])
-                print(log)
+                print(log, flush=True)
 
             # generate images for debugging
             # if (i+1) % args.sample_every == 0:
@@ -216,7 +216,7 @@ class Solver(nn.Module):
 
         filename = args.name + '_reference.jpg'
         fname = ospj(args.result_dir, filename)
-        print('Working on {}...'.format(fname))
+        print('Working on {}...'.format(fname), flush=True)
         if args.use_sean_encoder:
             if args.background_separation:
                 utils.translate_using_reference(nets_ema, args, src.x, ref.x, ref.y, fname, x_ref_mask=ref.mask, x_src_mask=src.mask, stego_model=self.stego_model)
