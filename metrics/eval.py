@@ -64,9 +64,11 @@ def calculate_metrics(nets, args, step, mode):
             lpips_values = []
             print('Generating images and calculating LPIPS for %s...' % task)
             for i, x_src in enumerate(tqdm(loader_src, total=len(loader_src))):
+                x_src_mask = x_src[1]
                 x_src = x_src[0] # img, mask
                 N = x_src.size(0)
                 x_src = x_src.to(device)
+                x_src_mask = x_src_mask.to(device)
                 y_trg = torch.tensor([trg_idx] * N).to(device)
                 masks = nets.fan.get_heatmap(x_src) if args.w_hpf > 0 else None
 
@@ -84,10 +86,8 @@ def calculate_metrics(nets, args, step, mode):
                         except:
                             iter_ref = iter(loader_ref)
                             x_ref, x_ref_mask = next(iter_ref)
-                            print(len(x_ref))
                             x_ref = x_ref.to(device)
                             x_ref_mask = x_ref_mask.to(device)
-                        print(x_ref.shape)
                         if x_ref.size(0) > N:
                             x_ref = x_ref[:N]
                             x_ref_mask = x_ref_mask[:N]
@@ -97,6 +97,8 @@ def calculate_metrics(nets, args, step, mode):
                             s_trg = nets.style_encoder(x_ref, y_trg)
 
                     x_fake = nets.generator(x_src, s_trg, masks=masks)
+                    if args.background_separation:
+                      x_fake = x_fake * x_src_mask + (1-x_src_mask)*x_src
                     group_of_images.append(x_fake)
 
                     # save generated images to calculate FID later
