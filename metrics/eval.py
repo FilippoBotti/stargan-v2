@@ -39,7 +39,9 @@ def calculate_metrics(nets, args, step, mode):
 
         if mode == 'reference':
             path_ref = os.path.join(args.val_img_dir, trg_domain)
+            path_ref_mask = os.path.join(args.val_mask_dir, trg_domain)
             loader_ref = get_eval_loader(root=path_ref,
+                                         mask_dir=path_ref_mask,
                                          img_size=args.img_size,
                                          batch_size=args.val_batch_size,
                                          imagenet_normalize=False,
@@ -47,7 +49,9 @@ def calculate_metrics(nets, args, step, mode):
 
         for src_idx, src_domain in enumerate(src_domains):
             path_src = os.path.join(args.val_img_dir, src_domain)
+            path_src_mask = os.path.join(args.val_mask_dir, src_domain)
             loader_src = get_eval_loader(root=path_src,
+                                         mask_dir=path_src_mask,
                                          img_size=args.img_size,
                                          batch_size=args.val_batch_size,
                                          imagenet_normalize=False)
@@ -80,7 +84,10 @@ def calculate_metrics(nets, args, step, mode):
 
                         if x_ref.size(0) > N:
                             x_ref = x_ref[:N]
-                        s_trg = nets.style_encoder(x_ref, y_trg)
+                        if args.use_sean_encoder:
+                            s_trg = nets.style_encoder(x_ref, y_trg, x_ref_mask)
+                        else:
+                            s_trg = nets.style_encoder(x_ref, y_trg)
 
                     x_fake = nets.generator(x_src, s_trg, masks=masks)
                     group_of_images.append(x_fake)
