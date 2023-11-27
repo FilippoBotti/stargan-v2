@@ -108,7 +108,7 @@ def calculate_metrics(nets, args, step, mode):
                             '%.4i_%.2i.png' % (i*args.val_batch_size+(k+1), j+1))
                         utils.save_image(x_fake[k], ncol=1, filename=filename)
 
-                lpips_value = calculate_lpips_given_images(group_of_images)
+                lpips_value = calculate_lpips_given_images(args, group_of_images)
                 lpips_values.append(lpips_value)
 
             # calculate LPIPS for each task (e.g. cat2dog, dog2cat)

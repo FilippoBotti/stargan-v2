@@ -78,6 +78,7 @@ def main(args):
                                             shuffle=False,
                                             num_workers=args.num_workers))
         solver.sample(loaders_sample)
+        solver.evaluate()
     elif args.mode == 'sample':
         assert len(subdirs(args.src_dir)) == args.num_domains
         assert len(subdirs(args.ref_dir)) == args.num_domains
@@ -120,6 +121,10 @@ if __name__ == '__main__':
                         help='GPU id')
     parser.add_argument('--name', type=str, default='stargan',
                         help='Project name')
+    parser.add_argument('--use_cross_attention', action='store_true', help='Use cross attention instead of AdaIN')
+    parser.add_argument('--lpips_path', type=str, default='projects/stargan-v2/metrics/lpips_weights.ckpt')
+
+    
     
     # model arguments
     parser.add_argument('--img_size', type=int, default=256,

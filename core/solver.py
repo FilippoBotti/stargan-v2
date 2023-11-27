@@ -135,19 +135,28 @@ class Solver(nn.Module):
                     x_ref2 = x_ref2 * x_ref2_mask
             
             # train the discriminator
-            d_loss, d_losses_latent = compute_d_loss(
-                    nets, args, x_real, y_org, y_trg, x_mask, background, z_trg=z_trg, masks=masks)
-            self._reset_grad()
-            d_loss.backward()
-            optims.discriminator.step()
-
             d_loss, d_losses_ref = compute_d_loss(
                 nets, args, x_real, y_org, y_trg, x_mask, background, x_ref=x_ref, x_ref_mask=x_ref_mask, masks=masks)
             self._reset_grad()
             d_loss.backward()
             optims.discriminator.step()
 
+            d_loss, d_losses_latent = compute_d_loss(
+                    nets, args, x_real, y_org, y_trg, x_mask, background, z_trg=z_trg, masks=masks)
+            self._reset_grad()
+            d_loss.backward()
+            optims.discriminator.step()
+
+            
+
             # train the generator
+            g_loss, g_losses_ref = compute_g_loss(
+                nets, args, x_real, y_org, y_trg, x_mask, background, x_refs=[x_ref, x_ref2], x_ref_masks=[x_ref_mask, x_ref2_mask], masks=masks)
+            
+            self._reset_grad()
+            g_loss.backward()
+            optims.generator.step()
+
             g_loss, g_losses_latent = compute_g_loss(
                 nets, args, x_real, y_org, y_trg, x_mask, background, z_trgs=[z_trg, z_trg2], masks=masks)
             self._reset_grad()
@@ -156,12 +165,7 @@ class Solver(nn.Module):
             optims.mapping_network.step()
             optims.style_encoder.step()
 
-            g_loss, g_losses_ref = compute_g_loss(
-                nets, args, x_real, y_org, y_trg, x_mask, background, x_refs=[x_ref, x_ref2], x_ref_masks=[x_ref_mask, x_ref2_mask], masks=masks)
             
-            self._reset_grad()
-            g_loss.backward()
-            optims.generator.step()
 
             # compute moving average of network parameters
             moving_average(nets.generator, nets_ema.generator, beta=0.999)
@@ -257,7 +261,10 @@ def compute_d_loss(nets, args, x_real, y_org, y_trg, x_mask, background, z_trg=N
                 s_trg = nets.style_encoder(x_ref, y_trg)
         
         x_fake = nets.generator(x_real, s_trg, masks=masks)
+        ##########
+        ######## REMOVE
         
+        #exit()
         # attention
         if args.background_separation:
             x_fake = x_fake*x_mask + background

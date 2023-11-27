@@ -16,7 +16,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from stablediffusion.ldm.modules.attention import SpatialTransformer
 from core.wing import FAN
 
 
@@ -78,9 +78,10 @@ class AdaIN(nn.Module):
 
 
 class AdainResBlk(nn.Module):
-    def __init__(self, dim_in, dim_out, style_dim=64, w_hpf=0,
+    def __init__(self, args, dim_in, dim_out, style_dim=64, w_hpf=0,
                  actv=nn.LeakyReLU(0.2), upsample=False):
         super().__init__()
+        self.args = args
         self.w_hpf = w_hpf
         self.actv = actv
         self.upsample = upsample
@@ -92,6 +93,8 @@ class AdainResBlk(nn.Module):
         self.conv2 = nn.Conv2d(dim_out, dim_out, 3, 1, 1)
         self.norm1 = AdaIN(style_dim, dim_in)
         self.norm2 = AdaIN(style_dim, dim_out)
+        self.cross_att1 = SpatialTransformer(dim_in, 8, 64, context_dim=style_dim)
+        self.cross_att2 = SpatialTransformer(dim_out, 8, 64, context_dim=style_dim)
         if self.learned_sc:
             self.conv1x1 = nn.Conv2d(dim_in, dim_out, 1, 1, 0, bias=False)
 
@@ -103,12 +106,18 @@ class AdainResBlk(nn.Module):
         return x
 
     def _residual(self, x, s):
-        x = self.norm1(x, s)
+        if self.args.use_cross_attention:
+            x = self.cross_att1(x, s)
+        else:
+            x = self.norm1(x,s)
         x = self.actv(x)
         if self.upsample:
             x = F.interpolate(x, scale_factor=2, mode='nearest')
         x = self.conv1(x)
-        x = self.norm2(x, s)
+        if self.args.use_cross_attention:
+            x = self.cross_att2(x, s)
+        else:
+            x = self.norm2(x,s)
         x = self.actv(x)
         x = self.conv2(x)
         return x
@@ -134,7 +143,7 @@ class HighPass(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, img_size=256, style_dim=64, max_conv_dim=512, w_hpf=1):
+    def __init__(self, args, img_size=256, style_dim=64, max_conv_dim=512, w_hpf=1):
         super().__init__()
         dim_in = 2**14 // img_size
         self.img_size = img_size
@@ -155,7 +164,7 @@ class Generator(nn.Module):
             self.encode.append(
                 ResBlk(dim_in, dim_out, normalize=True, downsample=True))
             self.decode.insert(
-                0, AdainResBlk(dim_out, dim_in, style_dim,
+                0, AdainResBlk(args, dim_out, dim_in, style_dim,
                                w_hpf=w_hpf, upsample=True))  # stack-like
             dim_in = dim_out
 
@@ -164,7 +173,7 @@ class Generator(nn.Module):
             self.encode.append(
                 ResBlk(dim_out, dim_out, normalize=True))
             self.decode.insert(
-                0, AdainResBlk(dim_out, dim_out, style_dim, w_hpf=w_hpf))
+                0, AdainResBlk(args, dim_out, dim_out, style_dim, w_hpf=w_hpf))
 
         if w_hpf > 0:
             device = torch.device(
@@ -296,7 +305,7 @@ class StyleEncoderSEAN(nn.Module):
 
                     # codes_avg[i].masked_scatter_(segmap.bool()[i, j], codes_component_mu)
         h = codes_vector.squeeze(0)
-        h = h.view(h.size(0), -1)       
+        h = h.view(h.size(0), -1) 
         # stargan-v2 encoder linear
         out = []
         for layer in self.unshared:
@@ -334,7 +343,7 @@ class Discriminator(nn.Module):
 
 
 def build_model(args):
-    generator = nn.DataParallel(Generator(args.img_size, args.style_dim, w_hpf=args.w_hpf), device_ids=[args.gpu_id])
+    generator = nn.DataParallel(Generator(args, args.img_size, args.style_dim, w_hpf=args.w_hpf), device_ids=[args.gpu_id])
     mapping_network = nn.DataParallel(MappingNetwork(args.latent_dim, args.style_dim, args.num_domains), device_ids=[args.gpu_id])
     if args.use_sean_encoder:   
         style_encoder = nn.DataParallel(StyleEncoderSEAN(args.img_size, args.style_dim, args.num_domains), device_ids=[args.gpu_id])
