@@ -18,8 +18,89 @@ import torch
 
 from metrics.fid import calculate_fid_given_paths
 from metrics.lpips import calculate_lpips_given_images
-from core.data_loader import get_eval_loader
+from core.data_loader import get_eval_loader, get_eval_fid_loader
 from core import utils
+
+
+@torch.no_grad()
+def generate_img(nets, args, step, mode):
+        print('Sampling single image...')
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        domains = os.listdir(args.val_img_dir)
+        domains.sort()
+        num_domains = len(domains)
+        print('Number of domains: %d' % num_domains)
+
+        for trg_idx, trg_domain in enumerate(domains):
+            src_domains = [x for x in domains if x != trg_domain]
+
+            path_ref = os.path.join(args.ref_dir, trg_domain)
+            path_ref_mask = os.path.join(args.ref_mask_dir, trg_domain)
+            loader_ref = get_eval_loader(root=path_ref,
+                                        mask_dir=path_ref_mask,
+                                        img_size=args.img_size,
+                                        batch_size=args.val_batch_size,
+                                        imagenet_normalize=False,
+                                        drop_last=True)
+            for src_idx, src_domain in enumerate(src_domains):
+                path_src = os.path.join(args.val_img_dir, src_domain)
+                path_src_mask = os.path.join(args.val_mask_dir, src_domain)
+                loader_src = get_eval_loader(root=path_src,
+                                            mask_dir=path_src_mask,
+                                            img_size=args.img_size,
+                                            batch_size=args.val_batch_size,
+                                            imagenet_normalize=False)
+                task = '%s2%s' % (src_domain, trg_domain)
+                path_fake = os.path.join(args.eval_dir, task)
+                shutil.rmtree(path_fake, ignore_errors=True)
+                os.makedirs(path_fake)
+
+                print('Generating images  ...')
+                for i, x_src in enumerate(tqdm(loader_src, total=len(loader_src))):
+                    x_src_mask = x_src[1]
+                    x_src = x_src[0] # img, mask
+                    N = x_src.size(0)
+                    x_src = x_src.to(device)
+                    x_src_mask = x_src_mask.to(device)
+                    y_trg = torch.tensor([trg_idx] * N).to(device)
+                    masks = nets.fan.get_heatmap(x_src) if args.w_hpf > 0 else None
+
+                    # generate 10 outputs from the same input
+                    group_of_images = []
+                    for j in range(args.num_outs_per_domain):
+                        try:
+                            x_ref, x_ref_mask = next(iter_ref)
+                            x_ref = x_ref.to(device)
+                            x_ref_mask = x_ref_mask.to(device)
+                        except:
+                            iter_ref = iter(loader_ref)
+                            x_ref, x_ref_mask = next(iter_ref)
+                            print(x_ref.shape)
+                            exit()
+                            x_ref = x_ref.to(device)
+                            x_ref_mask = x_ref_mask.to(device)
+
+                        if x_ref.size(0) > N:
+                            x_ref = x_ref[:N]
+                            x_ref_mask = x_ref_mask[:N]
+                        if args.use_sean_encoder:
+                            s_trg = nets.style_encoder(x_ref, y_trg, x_ref_mask)
+                        else:
+                            s_trg = nets.style_encoder(x_ref, y_trg)
+
+                        x_fake = nets.generator(x_src, s_trg, masks=masks)
+                        if args.background_separation:
+                            x_fake = x_fake * x_src_mask + (1-x_src_mask)*x_src
+                        group_of_images.append(x_fake)
+
+                        # save generated images to calculate FID later
+                        for k in range(N):
+                            filename = os.path.join(
+                                path_fake,
+                                '%.4i_%.2i.png' % (i*args.val_batch_size+(k+1), j+1))
+                            utils.save_image(x_fake[k], ncol=1, filename=filename)
+
 
 
 @torch.no_grad()

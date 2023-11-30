@@ -97,6 +97,8 @@ def main(args):
                                             shuffle=False,
                                             num_workers=args.num_workers))
         solver.sample(loaders)
+    elif args.mode == 'sample_fid':
+        solver.sample_fid()
     elif args.mode == 'eval':
         solver.evaluate()
     elif args.mode == 'align':
@@ -178,7 +180,7 @@ if __name__ == '__main__':
 
     # misc
     parser.add_argument('--mode', type=str, required=True,
-                        choices=['train', 'sample', 'eval', 'align'],
+                        choices=['train', 'sample', 'eval', 'align','sample_fid'],
                         help='This argument is used in solver')
     parser.add_argument('--num_workers', type=int, default=4,
                         help='Number of workers used in DataLoader')

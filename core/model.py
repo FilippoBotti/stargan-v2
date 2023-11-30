@@ -16,7 +16,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from attention import SpatialTransformer
+from core.attention import SpatialTransformer
 from core.wing import FAN
 
 class ResBlk(nn.Module):
@@ -92,8 +92,9 @@ class AdainResBlk(nn.Module):
         self.conv2 = nn.Conv2d(dim_out, dim_out, 3, 1, 1)
         self.norm1 = AdaIN(style_dim, dim_in)
         self.norm2 = AdaIN(style_dim, dim_out)
-        self.cross_att1 = SpatialTransformer(dim_in, 8, 64, context_dim=style_dim)
-        self.cross_att2 = SpatialTransformer(dim_out, 8, 64, context_dim=style_dim)
+        if self.args.use_cross_attention:
+            self.cross_att1 = SpatialTransformer(dim_in, 8, 64, context_dim=style_dim)
+            self.cross_att2 = SpatialTransformer(dim_out, 8, 64, context_dim=style_dim)
         if self.learned_sc:
             self.conv1x1 = nn.Conv2d(dim_in, dim_out, 1, 1, 0, bias=False)
 
@@ -380,5 +381,3 @@ def build_model(args):
 
     return nets, nets_ema
 
-
-print("model")

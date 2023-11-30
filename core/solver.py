@@ -22,7 +22,7 @@ from core.model import build_model
 from core.checkpoint import CheckpointIO
 from core.data_loader import InputFetcher
 import core.utils as utils
-from metrics.eval import calculate_metrics
+from metrics.eval import calculate_metrics,generate_img
 from STEGO.src.train_segmentation import LitUnsupervisedSegmenter
 from STEGO.src.crf import dense_crf
 from STEGO.src.utils import unnorm, remove_axes, denormalize
@@ -203,6 +203,14 @@ class Solver(nn.Module):
             # if (i+1) % args.eval_every == 0:
             #     calculate_metrics(nets_ema, args, i+1, mode='latent')
             #     calculate_metrics(nets_ema, args, i+1, mode='reference')
+
+    @torch.no_grad()
+    def sample_fid(self):
+        args = self.args
+        nets_ema = self.nets_ema
+        os.makedirs(self.args.result_dir, exist_ok=True)
+        self._load_checkpoint(self.args.resume_iter)
+        generate_img(nets_ema, self.args, step=self.args.resume_iter, mode='latent')
 
     @torch.no_grad()
     def sample(self, loaders):
