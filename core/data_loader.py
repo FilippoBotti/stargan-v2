@@ -166,7 +166,6 @@ class CustomDataset(data.Dataset):
 class CustomEvalDataset(data.Dataset):
     def __init__(self, root, mask_dir, img_size, transform_img=None, transform_mask=None):
         self.samples, self.masks= self._make_dataset(root, mask_dir)
-        print(len(self.samples), len(self.masks))
         self.transform_img = transform_img
         self.transform_mask = transform_mask
         self.img_size = img_size
@@ -174,13 +173,10 @@ class CustomEvalDataset(data.Dataset):
     def _make_dataset(self, root, root_mask_dir):
       fnames, masks = [], []
       cls_fnames = listdir(root)
-      print(root_mask_dir)
       mask_fnames = listdir(root_mask_dir)
-
       # Ensure that cls_fnames and mask_fnames are sorted in the same order
       cls_fnames.sort()
       mask_fnames.sort()
-
       fnames += cls_fnames
       masks+= mask_fnames
       return list(fnames), list(masks)

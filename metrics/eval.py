@@ -37,12 +37,13 @@ def generate_img(nets, args, step, mode):
 
             path_ref = os.path.join(args.ref_dir, trg_domain)
             path_ref_mask = os.path.join(args.ref_mask_dir, trg_domain)
+            print(path_ref,path_ref_mask)
             loader_ref = get_eval_loader(root=path_ref,
                                         mask_dir=path_ref_mask,
                                         img_size=args.img_size,
                                         batch_size=args.val_batch_size,
                                         imagenet_normalize=False,
-                                        drop_last=True)
+                                        drop_last=False)
             for src_idx, src_domain in enumerate(src_domains):
                 path_src = os.path.join(args.val_img_dir, src_domain)
                 path_src_mask = os.path.join(args.val_mask_dir, src_domain)
@@ -57,6 +58,7 @@ def generate_img(nets, args, step, mode):
                 os.makedirs(path_fake)
 
                 print('Generating images  ...')
+                print(len(loader_ref),len(loader_src))
                 for i, x_src in enumerate(tqdm(loader_src, total=len(loader_src))):
                     x_src_mask = x_src[1]
                     x_src = x_src[0] # img, mask
@@ -65,21 +67,21 @@ def generate_img(nets, args, step, mode):
                     x_src_mask = x_src_mask.to(device)
                     y_trg = torch.tensor([trg_idx] * N).to(device)
                     masks = nets.fan.get_heatmap(x_src) if args.w_hpf > 0 else None
-
+                    
                     # generate 10 outputs from the same input
                     group_of_images = []
-                    for j in range(args.num_outs_per_domain):
-                        try:
-                            x_ref, x_ref_mask = next(iter_ref)
-                            x_ref = x_ref.to(device)
-                            x_ref_mask = x_ref_mask.to(device)
-                        except:
-                            iter_ref = iter(loader_ref)
-                            x_ref, x_ref_mask = next(iter_ref)
-                            print(x_ref.shape)
-                            exit()
-                            x_ref = x_ref.to(device)
-                            x_ref_mask = x_ref_mask.to(device)
+                    for j, data in enumerate(loader_ref, len(loader_ref)):
+                        x_ref_mask = data[1]
+                        x_ref = data[0]
+                        # try:
+                        #     x_ref, x_ref_mask = next(iter_ref)
+                        #     x_ref = x_ref.to(device)
+                        #     x_ref_mask = x_ref_mask.to(device)
+                        # except:
+                        #     iter_ref = iter(loader_ref)
+                        #     x_ref, x_ref_mask = next(iter_ref)
+                        x_ref = x_ref.to(device)
+                        x_ref_mask = x_ref_mask.to(device)
 
                         if x_ref.size(0) > N:
                             x_ref = x_ref[:N]
@@ -98,7 +100,8 @@ def generate_img(nets, args, step, mode):
                         for k in range(N):
                             filename = os.path.join(
                                 path_fake,
-                                '%.4i_%.2i.png' % (i*args.val_batch_size+(k+1), j+1))
+                                '%.4i.png' % (i))
+                            print(path_fake)
                             utils.save_image(x_fake[k], ncol=1, filename=filename)
 
 
