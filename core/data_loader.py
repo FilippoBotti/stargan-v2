@@ -387,9 +387,9 @@ class InputFetcher:
                         x_ref2_mask=x_ref2_mask,z_trg=z_trg, z_trg2=z_trg2)
                 
         elif self.mode == 'val':
-            x_ref, mask, y_ref = self._fetch_inputs()
+            x_ref, x_ref_mask, y_ref = self._fetch_inputs()
             inputs = Munch(x_src=x, x_mask=mask, y_src=y,
-                           x_ref=x_ref, y_ref=y_ref)
+                           x_ref=x_ref, x_ref_mask=x_ref_mask, y_ref=y_ref)
         elif self.mode == 'test':
             inputs = Munch(x=x, mask=mask, y=y)
         else:

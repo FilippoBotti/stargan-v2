@@ -273,7 +273,7 @@ class StyleEncoderSEAN(nn.Module):
             dim_out = min(dim_in*2, max_conv_dim)
             blocks += [ResBlk(dim_in, dim_out, downsample=True)]
             dim_in = dim_out
-
+     
         blocks += [nn.LeakyReLU(0.2)]
         blocks += [nn.Conv2d(dim_out, dim_out, 3, 1, 1)]
         blocks += [nn.LeakyReLU(0.2)]
@@ -285,7 +285,6 @@ class StyleEncoderSEAN(nn.Module):
 
     def forward(self, x, y, mask):
         h = self.shared(x)
-
         resize = torchvision.transforms.Resize((64,64),antialias=True)
         mask = resize(mask)
          

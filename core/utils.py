@@ -62,14 +62,24 @@ def save_image(x, ncol, filename):
 
 
 @torch.no_grad()
-def translate_and_reconstruct(nets, args, x_src, y_src, x_ref, y_ref, filename):
+def translate_and_reconstruct(nets, args, x_src, y_src, x_ref, y_ref, filename, x_ref_mask=None, x_src_mask=None):
     N, C, H, W = x_src.size()
-    s_ref = nets.style_encoder(x_ref, y_ref)
+    if args.use_sean_encoder:
+        s_ref = nets.style_encoder(x_ref, y_ref, x_ref_mask)
+    else:
+        s_ref = nets.style_encoder(x_ref, y_ref)
     masks = nets.fan.get_heatmap(x_src) if args.w_hpf > 0 else None
     x_fake = nets.generator(x_src, s_ref, masks=masks)
-    s_src = nets.style_encoder(x_src, y_src)
+    if args.background_separation:
+        x_fake = x_fake * x_src_mask + x_src*(1-x_src_mask)
+    if args.use_sean_encoder:
+        s_src = nets.style_encoder(x_src, y_src,x_src_mask)
+    else:
+        s_src = nets.style_encoder(x_src, y_src)
     masks = nets.fan.get_heatmap(x_fake) if args.w_hpf > 0 else None
     x_rec = nets.generator(x_fake, s_src, masks=masks)
+    if args.background_separation:
+        x_rec = x_rec * x_src_mask + x_src*(1-x_src_mask)
     x_concat = [x_src, x_ref, x_fake, x_rec]
     x_concat = torch.cat(x_concat, dim=0)
     save_image(x_concat, N, filename)
@@ -77,7 +87,7 @@ def translate_and_reconstruct(nets, args, x_src, y_src, x_ref, y_ref, filename):
 
 
 @torch.no_grad()
-def translate_using_latent(nets, args, x_src, y_trg_list, z_trg_list, psi, filename):
+def translate_using_latent(nets, args, x_src, y_trg_list, z_trg_list, psi, filename, x_src_mask=None):
     N, C, H, W = x_src.size()
     latent_dim = z_trg_list[0].size(1)
     x_concat = [x_src]
@@ -94,6 +104,8 @@ def translate_using_latent(nets, args, x_src, y_trg_list, z_trg_list, psi, filen
             s_trg = nets.mapping_network(z_trg, y_trg)
             s_trg = torch.lerp(s_avg, s_trg, psi)
             x_fake = nets.generator(x_src, s_trg, masks=masks)
+            if args.background_separation:
+                x_fake = x_fake*x_src_mask + x_src*(1-x_src_mask)
             x_concat += [x_fake]
 
     x_concat = torch.cat(x_concat, dim=0)
@@ -171,15 +183,15 @@ def translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, x_ref_m
 
 @torch.no_grad()
 def debug_image(nets, args, inputs, step):
-    x_src, y_src = inputs.x_src, inputs.y_src
-    x_ref, y_ref = inputs.x_ref, inputs.y_ref
+    x_src, y_src, x_src_mask = inputs.x_src, inputs.y_src, inputs.x_mask
+    x_ref, y_ref, x_ref_mask = inputs.x_ref, inputs.y_ref, inputs.x_ref_mask
 
     device = inputs.x_src.device
     N = inputs.x_src.size(0)
 
     # translate and reconstruct (reference-guided)
     filename = ospj(args.sample_dir, '%06d_cycle_consistency.jpg' % (step))
-    translate_and_reconstruct(nets, args, x_src, y_src, x_ref, y_ref, filename)
+    translate_and_reconstruct(nets, args, x_src, y_src, x_ref, y_ref, filename, x_ref_mask, x_src_mask)
 
     # latent-guided image synthesis
     y_trg_list = [torch.tensor(y).repeat(N).to(device)
@@ -187,11 +199,11 @@ def debug_image(nets, args, inputs, step):
     z_trg_list = torch.randn(args.num_outs_per_domain, 1, args.latent_dim).repeat(1, N, 1).to(device)
     for psi in [0.5, 0.7, 1.0]:
         filename = ospj(args.sample_dir, '%06d_latent_psi_%.1f.jpg' % (step, psi))
-        translate_using_latent(nets, args, x_src, y_trg_list, z_trg_list, psi, filename)
+        translate_using_latent(nets, args, x_src, y_trg_list, z_trg_list, psi, filename, x_src_mask)
 
     # reference-guided image synthesis
     filename = ospj(args.sample_dir, '%06d_reference.jpg' % (step))
-    translate_using_reference(nets, args, x_src, x_ref, y_ref, filename)
+    translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, x_ref_mask, x_src_mask)
 
 
 # ======================= #
