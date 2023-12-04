@@ -16,7 +16,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from core.attention import SpatialTransformer
+from core.attention import SpatialTransformer, BasicTransformerBlock
 from core.wing import FAN
 
 class ResBlk(nn.Module):
@@ -263,8 +263,9 @@ class StyleEncoder(nn.Module):
         return s
 
 class StyleEncoderSEAN(nn.Module):
-    def __init__(self, img_size=256, style_dim=64, num_domains=2, max_conv_dim=512):
+    def __init__(self, args, img_size=256, style_dim=64, num_domains=2, max_conv_dim=512):
         super().__init__()
+        self.args = args
         dim_in = 2**14 // img_size
         blocks = []
         blocks += [nn.Conv2d(3, dim_in, 3, 1, 1)]
@@ -283,6 +284,16 @@ class StyleEncoderSEAN(nn.Module):
         self.unshared = nn.ModuleList()
         for _ in range(num_domains):
             self.unshared += [nn.Linear(dim_out, style_dim)]
+        if self.args.use_self_attention:
+            self_attention_layer = 4
+            self.att = nn.ModuleList()
+            for _ in range(self_attention_layer):
+                self.transformer_blocks = nn.ModuleList(
+            [BasicTransformerBlock(style_dim, 8, 64)
+                for d in range(self_attention_layer)]
+        )
+
+        
 
     def forward(self, x, y, mask):
         h = self.shared(x)
@@ -313,6 +324,9 @@ class StyleEncoderSEAN(nn.Module):
         out = torch.stack(out, dim=1)  # (batch, num_domains, style_dim)
         idx = torch.LongTensor(range(y.size(0))).to(y.device)
         s = out[idx, y]  # (batch, style_dim)
+        if self.args.use_self_attention:
+            for layer in self.att:
+                s = layer(s)
         return s
     
 class Discriminator(nn.Module):
@@ -346,7 +360,7 @@ def build_model(args):
     generator = nn.DataParallel(Generator(args, args.img_size, args.style_dim, w_hpf=args.w_hpf), device_ids=[args.gpu_id])
     mapping_network = nn.DataParallel(MappingNetwork(args.latent_dim, args.style_dim, args.num_domains), device_ids=[args.gpu_id])
     if args.use_sean_encoder:   
-        style_encoder = nn.DataParallel(StyleEncoderSEAN(args.img_size, args.style_dim, args.num_domains), device_ids=[args.gpu_id])
+        style_encoder = nn.DataParallel(StyleEncoderSEAN(args, args.img_size, args.style_dim, args.num_domains), device_ids=[args.gpu_id])
     else:
         style_encoder = nn.DataParallel(StyleEncoder(args.img_size, args.style_dim, args.num_domains), device_ids=[args.gpu_id])
     discriminator = nn.DataParallel(Discriminator(args.img_size, args.num_domains), device_ids=[args.gpu_id])

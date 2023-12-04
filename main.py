@@ -124,6 +124,7 @@ if __name__ == '__main__':
     parser.add_argument('--name', type=str, default='stargan',
                         help='Project name')
     parser.add_argument('--use_cross_attention', action='store_true', help='Use cross attention instead of AdaIN')
+    parser.add_argument('--use_self_attention', action='store_true', help='Use self attention for style code')
     parser.add_argument('--lpips_path', type=str, default='projects/stargan-v2/metrics/lpips_weights.ckpt')
 
     
