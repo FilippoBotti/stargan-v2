@@ -47,7 +47,7 @@ class Conv1x1(nn.Module):
 
 
 class LPIPS(nn.Module):
-    def __init__(self, args):
+    def __init__(self):
         super().__init__()
         self.alexnet = AlexNet()
         self.lpips_weights = nn.ModuleList()
@@ -61,9 +61,9 @@ class LPIPS(nn.Module):
     def _load_lpips_weights(self):
         own_state_dict = self.state_dict()
         if torch.cuda.is_available():
-            state_dict = torch.load(args.lpips_path)
+            state_dict = torch.load("projects/custom-stargan-v2/metrics/lpips_weights.ckpt")
         else:
-            state_dict = torch.load(args.lpips_path,
+            state_dict = torch.load("projects/custom-stargan-v2/metrics/lpips_weights.ckpt",
                                     map_location=torch.device('cpu'))
         for name, param in state_dict.items():
             if name in own_state_dict:
@@ -86,7 +86,7 @@ class LPIPS(nn.Module):
 def calculate_lpips_given_images(args, group_of_images):
     # group_of_images = [torch.randn(N, C, H, W) for _ in range(10)]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    lpips = LPIPS(args).eval().to(device)
+    lpips = LPIPS().eval().to(device)
     lpips_values = []
     num_rand_outputs = len(group_of_images)
 

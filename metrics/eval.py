@@ -23,7 +23,7 @@ from core import utils
 
 
 @torch.no_grad()
-def generate_img(nets, args, step, mode):
+def generate_img(nets, args, step):
         print('Sampling single image...')
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

@@ -210,7 +210,7 @@ class Solver(nn.Module):
         nets_ema = self.nets_ema
         os.makedirs(self.args.result_dir, exist_ok=True)
         self._load_checkpoint(self.args.resume_iter)
-        generate_img(nets_ema, self.args, step=self.args.resume_iter, mode='latent')
+        generate_img(nets_ema, self.args, step=self.args.resume_iter)
 
     @torch.no_grad()
     def sample(self, loaders):
@@ -246,8 +246,8 @@ class Solver(nn.Module):
         nets_ema = self.nets_ema
         resume_iter = args.resume_iter
         self._load_checkpoint(args.resume_iter)
-        calculate_metrics(nets_ema, args, step=resume_iter, mode='latent')
         calculate_metrics(nets_ema, args, step=resume_iter, mode='reference')
+        calculate_metrics(nets_ema, args, step=resume_iter, mode='latent')
 
 def compute_d_loss(nets, args, x_real, y_org, y_trg, x_mask, background, z_trg=None, x_ref=None, x_ref_mask=None, masks=None):
     assert (z_trg is None) != (x_ref is None)

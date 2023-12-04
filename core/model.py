@@ -90,11 +90,12 @@ class AdainResBlk(nn.Module):
     def _build_weights(self, dim_in, dim_out, style_dim=64):
         self.conv1 = nn.Conv2d(dim_in, dim_out, 3, 1, 1)
         self.conv2 = nn.Conv2d(dim_out, dim_out, 3, 1, 1)
-        self.norm1 = AdaIN(style_dim, dim_in)
-        self.norm2 = AdaIN(style_dim, dim_out)
         if self.args.use_cross_attention:
             self.cross_att1 = SpatialTransformer(dim_in, 8, 64, context_dim=style_dim)
             self.cross_att2 = SpatialTransformer(dim_out, 8, 64, context_dim=style_dim)
+        else:
+            self.norm1 = AdaIN(style_dim, dim_in)
+            self.norm2 = AdaIN(style_dim, dim_out)
         if self.learned_sc:
             self.conv1x1 = nn.Conv2d(dim_in, dim_out, 1, 1, 0, bias=False)
 
@@ -107,7 +108,7 @@ class AdainResBlk(nn.Module):
 
     def _residual(self, x, s):
         if self.args.use_cross_attention:
-            x = self.cross_att1(x, s)
+            x = self.cross_att1(x, s.unsqueeze(1))
         else:
             x = self.norm1(x,s)
         x = self.actv(x)
@@ -115,7 +116,7 @@ class AdainResBlk(nn.Module):
             x = F.interpolate(x, scale_factor=2, mode='nearest')
         x = self.conv1(x)
         if self.args.use_cross_attention:
-            x = self.cross_att2(x, s)
+            x = self.cross_att2(x, s.unsqueeze(1))
         else:
             x = self.norm2(x,s)
         x = self.actv(x)
