@@ -205,6 +205,21 @@ class Solver(nn.Module):
             #     calculate_metrics(nets_ema, args, i+1, mode='reference')
 
     @torch.no_grad()
+    def debug_image(self, loaders):
+        args = self.args
+        nets = self.nets
+        nets_ema = self.nets_ema
+        if args.resume_iter > 0:
+            self._load_checkpoint(args.resume_iter)
+        # fetch random validation images for debugging
+        for i in range(10):
+            fetcher_val = InputFetcher(args, loaders.val, None, args.latent_dim, 'val')
+            inputs_val = next(fetcher_val)
+            os.makedirs(args.sample_dir, exist_ok=True)
+            filename = args.name + str(i)
+            utils.debug_image_for_test(nets_ema, args, inputs=inputs_val, name=filename)
+
+    @torch.no_grad()
     def sample_fid(self):
         args = self.args
         nets_ema = self.nets_ema

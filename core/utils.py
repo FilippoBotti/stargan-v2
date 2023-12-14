@@ -205,6 +205,30 @@ def debug_image(nets, args, inputs, step):
     filename = ospj(args.sample_dir, '%06d_reference.jpg' % (step))
     translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, x_ref_mask, x_src_mask)
 
+@torch.no_grad()
+def debug_image_for_test(nets, args, inputs, name):
+    x_src, y_src, x_src_mask = inputs.x_src, inputs.y_src, inputs.x_mask
+    x_ref, y_ref, x_ref_mask = inputs.x_ref, inputs.y_ref, inputs.x_ref_mask
+
+    device = inputs.x_src.device
+    N = inputs.x_src.size(0)
+
+    # translate and reconstruct (reference-guided)
+    filename = ospj(args.sample_dir, f'{name}_cycle_consistency.jpg')
+    translate_and_reconstruct(nets, args, x_src, y_src, x_ref, y_ref, filename, x_ref_mask, x_src_mask)
+
+    # latent-guided image synthesis
+    y_trg_list = [torch.tensor(y).repeat(N).to(device)
+                  for y in range(min(args.num_domains, 5))]
+    z_trg_list = torch.randn(args.num_outs_per_domain, 1, args.latent_dim).repeat(1, N, 1).to(device)
+    for psi in [0.5, 0.7, 1.0]:
+        filename = ospj(args.sample_dir, name + '_latent_psi_%.1f.jpg' % (psi))
+        translate_using_latent(nets, args, x_src, y_trg_list, z_trg_list, psi, filename, x_src_mask)
+
+    # reference-guided image synthesis
+    filename = ospj(args.sample_dir, f'{name}_reference.jpg')
+    translate_using_reference(nets, args, x_src, x_ref, y_ref, filename, x_ref_mask, x_src_mask)
+
 
 # ======================= #
 # Video-related functions #
